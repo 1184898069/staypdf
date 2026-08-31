@@ -33,3 +33,15 @@ export function isImageFile(file) {
   if (type.startsWith('image/')) return true;
   return /\.(png|jpe?g|webp|gif|bmp)$/i.test(name);
 }
+
+export function isDocxFile(file) {
+  if (!file) return false;
+  const type = (file.type || '').toLowerCase();
+  const name = (file.name || '').toLowerCase();
+  return (
+    type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    type === 'application/vnd.ms-word.document.macroenabled.12' ||
+    name.endsWith('.docx')
+  );
+}
+

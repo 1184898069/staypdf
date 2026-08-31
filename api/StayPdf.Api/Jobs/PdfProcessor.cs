@@ -150,10 +150,140 @@ public static class PdfProcessor
         return Save(doc);
     }
 
+    public static byte[] Compress(byte[] file, string? quality)
+    {
+        var (jpegQuality, dpi) = ParseQuality(quality);
+        using var src = Open(file, PdfDocumentOpenMode.Import);
+        if (src.PageCount < 1)
+        {
+            throw new PdfException("failed", "Could not process this file.");
+        }
+
+        var sizes = new List<(double W, double H)>(src.PageCount);
+        for (var i = 0; i < src.PageCount; i++)
+        {
+            sizes.Add((src.Pages[i].Width, src.Pages[i].Height));
+        }
+
+        if (PdfRaster.TryRenderJpegs(file, dpi, jpegQuality, out var jpegs) && jpegs.Count > 0)
+        {
+            return PagesFromJpegs(jpegs, sizes);
+        }
+
+        var recompressed = RecompressEmbedded(file, jpegQuality, sizes);
+        if (recompressed is not null)
+        {
+            return recompressed;
+        }
+
+        return CopyAll(src);
+    }
+
     public static int PageCount(byte[] file)
     {
         using var doc = Open(file, PdfDocumentOpenMode.Import);
         return doc.PageCount;
+    }
+
+    private static (int JpegQuality, int Dpi) ParseQuality(string? quality)
+    {
+        var q = (quality ?? "medium").Trim().ToLowerInvariant();
+        return q switch
+        {
+            "low" => (40, 96),
+            "high" => (75, 144),
+            _ => (58, 120)
+        };
+    }
+
+    private static byte[] PagesFromJpegs(IReadOnlyList<byte[]> jpegs, IReadOnlyList<(double W, double H)> sizes)
+    {
+        using var doc = new PdfDocument();
+        for (var i = 0; i < jpegs.Count; i++)
+        {
+            using var xImage = XImage.FromStream(() => new MemoryStream(jpegs[i], writable: false));
+            var page = doc.AddPage();
+            if (i < sizes.Count)
+            {
+                page.Width = sizes[i].W;
+                page.Height = sizes[i].H;
+            }
+            else
+            {
+                page.Width = A4.Width;
+                page.Height = A4.Height;
+            }
+
+            using var gfx = XGraphics.FromPdfPage(page);
+            gfx.DrawImage(xImage, 0, 0, page.Width, page.Height);
+        }
+
+        return Save(doc);
+    }
+
+    private static byte[]? RecompressEmbedded(byte[] file, int jpegQuality, IReadOnlyList<(double W, double H)> sizes)
+    {
+        try
+        {
+            using var pig = UglyToad.PdfPig.PdfDocument.Open(file);
+            if (pig.IsEncrypted)
+            {
+                throw new PdfException("encrypted", "This PDF is encrypted.");
+            }
+
+            var jpegs = new List<byte[]>();
+            var pageIndex = 0;
+            foreach (var page in pig.GetPages())
+            {
+                var images = page.GetImages().ToList();
+                if (images.Count == 0) return null;
+                var img = images.OrderByDescending(i => i.WidthInSamples * (long)i.HeightInSamples).First();
+                byte[] raw;
+                if (img.TryGetPng(out var png) && png is { Length: > 0 })
+                {
+                    raw = png;
+                }
+                else
+                {
+                    raw = img.RawBytes.ToArray();
+                }
+
+                try
+                {
+                    using var image = Image.Load(raw);
+                    using var ms = new MemoryStream();
+                    image.SaveAsJpeg(ms, new JpegEncoder { Quality = jpegQuality });
+                    jpegs.Add(ms.ToArray());
+                }
+                catch
+                {
+                    return null;
+                }
+
+                pageIndex++;
+            }
+
+            return jpegs.Count == 0 ? null : PagesFromJpegs(jpegs, sizes);
+        }
+        catch (PdfException)
+        {
+            throw;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static byte[] CopyAll(PdfDocument src)
+    {
+        using var output = new PdfDocument();
+        for (var i = 0; i < src.PageCount; i++)
+        {
+            output.AddPage(src.Pages[i]);
+        }
+
+        return Save(output);
     }
 
     private static void EnsureInRange(IReadOnlyList<int> pages, int count)

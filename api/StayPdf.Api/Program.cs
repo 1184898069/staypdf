@@ -112,6 +112,8 @@ builder.Services
     });
 builder.Services.AddAuthorization();
 
+PdfFonts.Ensure();
+
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())

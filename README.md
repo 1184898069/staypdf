@@ -7,6 +7,8 @@ Live site: https://1184898069.github.io/staypdf/
 
 The GitHub Pages build is a landing + app. Configure VITE_API_URL to talk to your API. If the API URL is not set, the UI asks you to run locally to process files.
 
+Tools: merge, split, rotate, delete pages, images → PDF, compress, OCR / scan to text, and PDF ↔ Word. Compress rasterizes pages and JPEG-encodes them (image-heavy files shrink; vector-only files may not). OCR extracts digital text with PdfPig and, when Tesseract is installed (`tesseract-ocr`, `tesseract-ocr-eng`, `tesseract-ocr-chi-sim`), OCRs scans. PDF ↔ Word is text-based: tables, images, and complex layout are simplified. Tesseract is optional; digital PDFs still extract without it.
+
 ## Run locally / 本地运行
 
 ```

@@ -18,6 +18,9 @@ public static class JobEndpoints
         g.MapPost("/rotate", Rotate);
         g.MapPost("/delete", Delete);
         g.MapPost("/images", Images);
+        g.MapPost("/compress", Compress);
+        g.MapPost("/ocr", Ocr);
+        g.MapPost("/word", Word);
     }
 
     private static Task<IResult> Merge(HttpContext ctx, AppDbContext db, QuotaService quota, CancellationToken ct) =>
@@ -91,13 +94,52 @@ public static class JobEndpoints
             return PdfProcessor.ImagesToPdf(files, fit);
         });
 
-    private static async Task<IResult> Run(
+    private static Task<IResult> Compress(HttpContext ctx, AppDbContext db, QuotaService quota, CancellationToken ct) =>
+        Run(ctx, db, quota, ct, files =>
+        {
+            if (files.Count != 1) throw new PdfException("need-one", "Add a PDF first.");
+            var quality = ctx.Request.Form["quality"].ToString();
+            var bytes = PdfProcessor.Compress(files[0], quality);
+            return new JobFile(bytes, "application/pdf", Stem(ctx, "document") + "-compressed.pdf");
+        });
+
+    private static Task<IResult> Ocr(HttpContext ctx, AppDbContext db, QuotaService quota, CancellationToken ct) =>
+        Run(ctx, db, quota, ct, files =>
+        {
+            if (files.Count != 1) throw new PdfException("need-one", "Add a PDF first.");
+            var lang = ctx.Request.Form["lang"].ToString();
+            var bytes = OcrProcessor.ToText(files[0], lang);
+            return new JobFile(bytes, "text/plain; charset=utf-8", Stem(ctx, "document") + "-ocr.txt");
+        });
+
+    private static Task<IResult> Word(HttpContext ctx, AppDbContext db, QuotaService quota, CancellationToken ct) =>
+        Run(ctx, db, quota, ct, files =>
+        {
+            if (files.Count != 1) throw new PdfException("need-doc", "Add a PDF or Word file first.");
+            var formFile = ctx.Request.Form.Files.Count > 0 ? ctx.Request.Form.Files[0] : null;
+            var result = WordProcessor.Convert(files[0], formFile?.FileName, formFile?.ContentType);
+            var stem = Stem(ctx, "document");
+            var name = result.Filename.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)
+                ? stem + "-converted.pdf"
+                : stem + "-converted.docx";
+            return result with { Filename = name };
+        });
+
+    private static Task<IResult> Run(
         HttpContext ctx,
         AppDbContext db,
         QuotaService quota,
         CancellationToken ct,
         string filename,
-        Func<List<byte[]>, byte[]> work)
+        Func<List<byte[]>, byte[]> work) =>
+        Run(ctx, db, quota, ct, files => new JobFile(work(files), "application/pdf", filename));
+
+    private static async Task<IResult> Run(
+        HttpContext ctx,
+        AppDbContext db,
+        QuotaService quota,
+        CancellationToken ct,
+        Func<List<byte[]>, JobFile> work)
     {
         var actor = await CurrentActor.ResolveAsync(ctx, db, ct);
         List<byte[]> buffers;
@@ -113,7 +155,8 @@ public static class JobEndpoints
         byte[]? result = null;
         try
         {
-            result = work(buffers);
+            var job = work(buffers);
+            result = job.Bytes;
             if (!actor.IsPro)
             {
                 var recorded = await quota.TryRecordSuccessAsync(actor.SubjectId, ct);
@@ -126,7 +169,7 @@ public static class JobEndpoints
 
             var payload = result;
             result = null;
-            return Results.File(payload, "application/pdf", filename);
+            return Results.File(payload, job.ContentType, job.Filename);
         }
         catch (PdfException ex)
         {
@@ -137,6 +180,19 @@ public static class JobEndpoints
             ClearAll(buffers);
             Clear(ref result);
         }
+    }
+
+    private static string Stem(HttpContext ctx, string fallback)
+    {
+        var name = ctx.Request.Form.Files.Count > 0 ? ctx.Request.Form.Files[0].FileName : "";
+        var stem = Path.GetFileNameWithoutExtension(name ?? "");
+        if (string.IsNullOrWhiteSpace(stem)) return fallback;
+        foreach (var c in Path.GetInvalidFileNameChars())
+        {
+            stem = stem.Replace(c, '_');
+        }
+
+        return stem;
     }
 
     private static async Task<List<byte[]>> ReadFilesAsync(HttpContext ctx, CancellationToken ct)

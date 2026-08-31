@@ -19,8 +19,13 @@ describe('gated tools use the API', () => {
     const api = readFileSync(join(root, 'src/lib/api.js'), 'utf8');
     const app = readFileSync(join(root, 'src/app.js'), 'utf8');
     assert.match(api, /\/api\/jobs\//);
+    assert.match(app, /['"]\/compress['"]/);
+    assert.match(app, /['"]\/ocr['"]/);
+    assert.match(app, /['"]\/word['"]/);
     assert.doesNotMatch(app, /unlockDemoPro/);
     assert.doesNotMatch(api, /unlockDemoPro/);
+    assert.doesNotMatch(app, /pdf-lib/);
+    assert.doesNotMatch(api, /pdf-lib/);
     assert.match(app, /#\/register/);
     assert.match(app, /['"]\/verify['"]/);
     assert.match(api, /\/api\/auth\/register/);

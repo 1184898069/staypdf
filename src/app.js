@@ -1,9 +1,9 @@
 import { t, getLang, setLang } from './i18n.js';
 import { parsePageRanges } from './lib/ranges.js';
-import { downloadBytes, escapeHtml, isPdfFile, isImageFile } from './lib/download.js';
+import { downloadBytes, escapeHtml, isPdfFile, isImageFile, isDocxFile } from './lib/download.js';
 import { getApiUrl, getMe, getTurnstileSiteKey, login, logout, postJob, register, resendVerification, verifyEmail } from './lib/api.js';
 
-const ROUTES = ['/', '/merge', '/split', '/rotate', '/delete', '/images', '/login', '/register', '/verify'];
+const ROUTES = ['/', '/merge', '/split', '/rotate', '/delete', '/images', '/compress', '/ocr', '/word', '/login', '/register', '/verify'];
 
 function routeFromHash() {
   const raw = (location.hash || '#/').replace(/^#/, '');
@@ -59,6 +59,15 @@ function stem(filename, fallback = 'document') {
   return base || fallback;
 }
 
+function mimeFor(filename) {
+  const n = String(filename || '').toLowerCase();
+  if (n.endsWith('.txt')) return 'text/plain;charset=utf-8';
+  if (n.endsWith('.docx')) {
+    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  }
+  return 'application/pdf';
+}
+
 export function createApp(root) {
   const state = {
     files: [],
@@ -68,6 +77,8 @@ export function createApp(root) {
     paywall: false,
     angle: 90,
     fit: 'a4',
+    quality: 'medium',
+    ocrLang: 'eng+chi_sim',
     ranges: '',
     email: '',
     password: '',
@@ -97,13 +108,19 @@ export function createApp(root) {
     state.busy = false;
     state.angle = 90;
     state.fit = 'a4';
+    state.quality = 'medium';
+    state.ocrLang = 'eng+chi_sim';
     state.ranges = '';
   }
 
   function addFiles(list, kind) {
     const incoming = Array.from(list || []);
-    const accepted = incoming.filter((f) => (kind === 'image' ? isImageFile(f) : isPdfFile(f)));
-    if (kind === 'one-pdf') {
+    const accepted = incoming.filter((f) => {
+      if (kind === 'image') return isImageFile(f);
+      if (kind === 'one-word') return isPdfFile(f) || isDocxFile(f);
+      return isPdfFile(f);
+    });
+    if (kind === 'one-pdf' || kind === 'one-word') {
       const first = accepted[0];
       if (first) state.files = [first];
       draw();
@@ -134,6 +151,8 @@ export function createApp(root) {
       'run-local': t('runLocally'),
       'too-large': t('tooLarge'),
       'too-many': t('tooMany'),
+      'ocr-engine': t('ocrEngine'),
+      'need-doc': t('needDoc'),
     };
     state.messageKind = 'err';
     state.message = map[code] || t('failed');
@@ -196,7 +215,7 @@ export function createApp(root) {
     draw();
     try {
       const bytes = await postJob(kind, files, fields);
-      downloadBytes(bytes, filename);
+      downloadBytes(bytes, filename, mimeFor(filename));
       ok(t('done'));
       await refreshSession();
     } catch (err) {
@@ -298,21 +317,23 @@ export function createApp(root) {
 
   function home() {
     const tools = [
-      ['/merge', 'merge', 'mergeDesc', false],
-      ['/split', 'split', 'splitDesc', false],
-      ['/rotate', 'rotate', 'rotateDesc', false],
-      ['/delete', 'delete', 'deleteDesc', false],
-      ['/images', 'images', 'imagesDesc', false],
-      [null, 'compress', 'proComing', true],
-      [null, 'ocr', 'proComing', true],
-      [null, 'word', 'proComing', true],
+      ['/merge', 'merge', 'mergeDesc', ''],
+      ['/split', 'split', 'splitDesc', ''],
+      ['/rotate', 'rotate', 'rotateDesc', ''],
+      ['/delete', 'delete', 'deleteDesc', ''],
+      ['/images', 'images', 'imagesDesc', ''],
+      ['/compress', 'compress', 'compressDesc', 'advanced'],
+      ['/ocr', 'ocr', 'ocrDesc', 'advanced'],
+      ['/word', 'word', 'wordDesc', 'advanced'],
     ];
     const cards = tools
-      .map(([href, title, desc, soon]) => {
+      .map(([href, title, desc, badge]) => {
+        const mark = badge
+          ? `<span class="badge adv">${escapeHtml(t(badge))}</span>`
+          : `<span class="go">→</span>`;
         const inner = `<h2>${escapeHtml(t(title))}</h2>
           <p>${escapeHtml(t(desc))}</p>
-          ${soon ? `<span class="badge">${escapeHtml(t('proComing'))}</span>` : `<span class="go">→</span>`}`;
-        if (soon) return `<div class="card soon">${inner}</div>`;
+          ${mark}`;
         return `<a class="card" href="#${href}" data-nav="${href}">${inner}</a>`;
       })
       .join('');
@@ -415,6 +436,57 @@ export function createApp(root) {
        </label>
        <div class="row">
          <button class="btn primary" id="run" type="button" ${state.busy ? 'disabled' : ''}>${escapeHtml(t('runImages'))}</button>
+       </div>`,
+    );
+  }
+
+  function compressView() {
+    return toolChrome(
+      'compress',
+      'compressDesc',
+      `${dropzone(t('dropPdfOne'), false, 'application/pdf,.pdf')}
+       ${fileList()}
+       <label class="field">${escapeHtml(t('quality'))}
+         <select id="quality">
+           <option value="low" ${state.quality === 'low' ? 'selected' : ''}>${escapeHtml(t('qualityLow'))}</option>
+           <option value="medium" ${state.quality === 'medium' ? 'selected' : ''}>${escapeHtml(t('qualityMed'))}</option>
+           <option value="high" ${state.quality === 'high' ? 'selected' : ''}>${escapeHtml(t('qualityHigh'))}</option>
+         </select>
+       </label>
+       <div class="row">
+         <button class="btn primary" id="run" type="button" ${state.busy ? 'disabled' : ''}>${escapeHtml(t('runCompress'))}</button>
+       </div>`,
+    );
+  }
+
+  function ocrView() {
+    return toolChrome(
+      'ocr',
+      'ocrDesc',
+      `${dropzone(t('dropPdfOne'), false, 'application/pdf,.pdf')}
+       ${fileList()}
+       <label class="field">${escapeHtml(t('ocrLang'))}
+         <select id="ocr-lang">
+           <option value="eng+chi_sim" ${state.ocrLang === 'eng+chi_sim' ? 'selected' : ''}>English + 简体中文</option>
+           <option value="eng" ${state.ocrLang === 'eng' ? 'selected' : ''}>English</option>
+           <option value="chi_sim" ${state.ocrLang === 'chi_sim' ? 'selected' : ''}>简体中文</option>
+         </select>
+       </label>
+       <div class="row">
+         <button class="btn primary" id="run" type="button" ${state.busy ? 'disabled' : ''}>${escapeHtml(t('runOcr'))}</button>
+       </div>`,
+    );
+  }
+
+  function wordView() {
+    return toolChrome(
+      'word',
+      'wordDesc',
+      `${dropzone(t('dropWord'), false, 'application/pdf,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx')}
+       ${fileList()}
+       <p class="hint">${escapeHtml(t('wordHint'))}</p>
+       <div class="row">
+         <button class="btn primary" id="run" type="button" ${state.busy ? 'disabled' : ''}>${escapeHtml(t('runWord'))}</button>
        </div>`,
     );
   }
@@ -569,6 +641,10 @@ export function createApp(root) {
     if (ranges) ranges.addEventListener('input', () => { state.ranges = ranges.value; });
     const fit = root.querySelector('#fit');
     if (fit) fit.addEventListener('change', () => { state.fit = fit.value; });
+    const quality = root.querySelector('#quality');
+    if (quality) quality.addEventListener('change', () => { state.quality = quality.value; });
+    const ocrLang = root.querySelector('#ocr-lang');
+    if (ocrLang) ocrLang.addEventListener('change', () => { state.ocrLang = ocrLang.value; });
     root.querySelectorAll('input[name="angle"]').forEach((el) => {
       el.addEventListener('change', () => { state.angle = Number(el.value); });
     });
@@ -731,6 +807,21 @@ export function createApp(root) {
       } else if (route === '/images') {
         if (state.files.length === 0) return fail('need-image'), draw();
         await runExport('images', state.files, { fit: state.fit }, 'images.pdf');
+      } else if (route === '/compress') {
+        const file = state.files[0];
+        if (!file) return fail('need-one'), draw();
+        await runExport('compress', [file], { quality: state.quality }, `${stem(file.name)}-compressed.pdf`);
+      } else if (route === '/ocr') {
+        const file = state.files[0];
+        if (!file) return fail('need-one'), draw();
+        await runExport('ocr', [file], { lang: state.ocrLang }, `${stem(file.name)}-ocr.txt`);
+      } else if (route === '/word') {
+        const file = state.files[0];
+        if (!file) return fail('need-doc'), draw();
+        const outName = isDocxFile(file)
+          ? `${stem(file.name)}-converted.pdf`
+          : `${stem(file.name)}-converted.docx`;
+        await runExport('word', [file], {}, outName);
       }
     });
   }
@@ -752,6 +843,9 @@ export function createApp(root) {
       '/rotate': rotateView,
       '/delete': deleteView,
       '/images': imagesView,
+      '/compress': compressView,
+      '/ocr': ocrView,
+      '/word': wordView,
       '/login': loginView,
       '/register': registerView,
       '/verify': verifyView,
@@ -760,6 +854,7 @@ export function createApp(root) {
     bindCommon();
     if (route === '/merge') bindDrop('pdf');
     else if (route === '/images') bindDrop('image');
+    else if (route === '/word') bindDrop('one-word');
     else if (route === '/login') bindLogin();
     else if (route === '/register') bindRegister();
     else if (route === '/verify') bindVerify();
