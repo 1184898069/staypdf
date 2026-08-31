@@ -21,6 +21,17 @@ if (builder.Environment.IsProduction() && jwtSecret.Length < 32)
     throw new InvalidOperationException("JWT_SECRET must be at least 32 characters.");
 }
 
+if (builder.Environment.IsProduction())
+{
+    var turnstileSecret = builder.Configuration["TURNSTILE_SECRET"]
+                          ?? Environment.GetEnvironmentVariable("TURNSTILE_SECRET")
+                          ?? "";
+    if (string.IsNullOrWhiteSpace(turnstileSecret))
+    {
+        throw new InvalidOperationException("TURNSTILE_SECRET is required in Production.");
+    }
+}
+
 if (string.IsNullOrEmpty(jwtSecret))
 {
     throw new InvalidOperationException("JWT_SECRET is required. Set it in .env (32+ characters).");
@@ -30,6 +41,9 @@ var sqlite = builder.Configuration.GetConnectionString("Default") ?? "Data Sourc
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlite(sqlite));
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<QuotaService>();
+builder.Services.AddSingleton<AuthRateLimiter>();
+builder.Services.AddSingleton<IEmailSender, EmailSender>();
+builder.Services.AddHttpClient<ITurnstileVerifier, TurnstileVerifier>();
 builder.Services.AddHealthChecks();
 
 builder.Services.Configure<FormOptions>(options =>

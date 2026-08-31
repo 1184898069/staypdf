@@ -6,6 +6,12 @@ export function getApiUrl() {
   return null;
 }
 
+export function getTurnstileSiteKey() {
+  const raw = import.meta.env.VITE_TURNSTILE_SITE_KEY;
+  if (typeof raw === 'string' && raw.trim()) return raw.trim();
+  return '';
+}
+
 async function request(path, options = {}) {
   const base = getApiUrl();
   if (!base) {
@@ -23,6 +29,14 @@ async function request(path, options = {}) {
     headers,
   });
   return res;
+}
+
+function throwHttp(res, fallback) {
+  const err = new Error(fallback);
+  if (res.status === 429) err.code = 'try-later';
+  else if (res.status === 503) err.code = 'mail';
+  else err.code = fallback;
+  throw err;
 }
 
 export async function getMe() {
@@ -45,6 +59,42 @@ export async function login(email, password) {
     err.code = 'auth';
     throw err;
   }
+  return res.json();
+}
+
+export async function register(email, password, extra = {}) {
+  const res = await request('/api/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({
+      email,
+      password,
+      company: extra.company || '',
+      'cf-turnstile-response': extra.turnstile || '',
+    }),
+  });
+  if (!res.ok) throwHttp(res, 'register');
+  return res.json();
+}
+
+export async function verifyEmail(token) {
+  const res = await request('/api/auth/verify', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) {
+    const err = new Error('verify');
+    err.code = 'verify';
+    throw err;
+  }
+  return res.json();
+}
+
+export async function resendVerification(email) {
+  const res = await request('/api/auth/resend-verification', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) throwHttp(res, 'register');
   return res.json();
 }
 

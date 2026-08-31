@@ -29,20 +29,29 @@ public class StayPdfFactory : WebApplicationFactory<Program>
     {
         if (_envApplied) return;
         _envApplied = true;
-        var jwt = Extra.TryGetValue("JWT_SECRET", out var js) ? js : "test-jwt-secret-must-be-32-chars-min!";
-        var email = Extra.TryGetValue("STAYPDF_TEST_EMAIL", out var em) ? em : "";
-        var password = Extra.TryGetValue("STAYPDF_TEST_PASSWORD", out var pw) ? pw : "";
-        Set("JWT_SECRET", jwt);
-        Set("STAYPDF_TEST_EMAIL", email);
-        Set("STAYPDF_TEST_PASSWORD", password);
+        Set("JWT_SECRET", "test-jwt-secret-must-be-32-chars-min!");
+        Set("STAYPDF_TEST_EMAIL", "");
+        Set("STAYPDF_TEST_PASSWORD", "");
+        Set("TURNSTILE_SECRET", "");
+        Set("SMTP_HOST", "");
+        Set("SMTP_PORT", "");
+        Set("SMTP_USER", "");
+        Set("SMTP_PASSWORD", "");
+        Set("SMTP_FROM", "");
+        Set("APP_PUBLIC_URL", "http://localhost:5173");
         Set("ConnectionStrings__Default", $"Data Source={DbPath}");
         Set("CORS_ORIGINS", "http://localhost:5173");
         Set("ASPNETCORE_ENVIRONMENT", EnvironmentName);
+        foreach (var (k, v) in Extra) Set(k, v);
     }
 
     private void Set(string key, string? value)
     {
-        _previousEnv[key] = Environment.GetEnvironmentVariable(key);
+        if (!_previousEnv.ContainsKey(key))
+        {
+            _previousEnv[key] = Environment.GetEnvironmentVariable(key);
+        }
+
         Environment.SetEnvironmentVariable(key, value);
     }
 

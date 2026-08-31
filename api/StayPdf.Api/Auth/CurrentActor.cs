@@ -12,6 +12,13 @@ public static class CurrentActor
     public static async Task<Actor> ResolveAsync(HttpContext ctx, AppDbContext db, CancellationToken ct)
     {
         var deviceId = ctx.Items["DeviceId"] as string ?? "";
+        var anonymous = new Actor(
+            string.IsNullOrEmpty(deviceId) ? "device:unknown" : $"device:{deviceId}",
+            false,
+            false,
+            null,
+            null);
+
         var principal = ctx.User;
         if (principal.Identity?.IsAuthenticated == true)
         {
@@ -23,7 +30,7 @@ public static class CurrentActor
                     .AsNoTracking()
                     .Include(u => u.License)
                     .FirstOrDefaultAsync(u => u.Id == userId, ct);
-                if (user is not null)
+                if (user is not null && user.EmailVerified)
                 {
                     var isPro = user.License is not null;
                     return new Actor($"user:{user.Id:N}", isPro, true, user.Email, user.Id);
@@ -31,6 +38,6 @@ public static class CurrentActor
             }
         }
 
-        return new Actor(string.IsNullOrEmpty(deviceId) ? "device:unknown" : $"device:{deviceId}", false, false, null, null);
+        return anonymous;
     }
 }

@@ -373,3 +373,7 @@ input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focu
 .btn.small { padding: 6px 10px; font-size: 13px; }
 .who { font-size: 13px; color: var(--muted); max-width: 18ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .login-form { max-width: 360px; }
+
+.auth-switch { margin-top: 14px; font-size: 14px; }
+.hint { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+.turnstile { margin-top: 16px; min-height: 65px; }

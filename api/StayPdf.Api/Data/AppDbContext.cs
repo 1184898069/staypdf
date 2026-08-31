@@ -8,6 +8,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<License> Licenses => Set<License>();
     public DbSet<Device> Devices => Set<Device>();
     public DbSet<DailyExport> DailyExports => Set<DailyExport>();
+    public DbSet<EmailVerificationToken> EmailVerificationTokens => Set<EmailVerificationToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -41,6 +42,18 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(x => x.SubjectId).HasMaxLength(80).IsRequired();
             e.Property(x => x.UtcDay).HasMaxLength(10).IsRequired();
             e.HasIndex(x => new { x.SubjectId, x.UtcDay }).IsUnique();
+        });
+
+        modelBuilder.Entity<EmailVerificationToken>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.TokenHash).HasMaxLength(64).IsRequired();
+            e.HasIndex(x => x.TokenHash);
+            e.HasIndex(x => x.UserId);
+            e.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

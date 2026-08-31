@@ -35,6 +35,7 @@ public class ProductionSeedTests
             Extra =
             {
                 ["JWT_SECRET"] = "prod-jwt-secret-must-be-32-chars-min!",
+                ["TURNSTILE_SECRET"] = "prod-turnstile-secret-for-tests",
                 ["STAYPDF_TEST_EMAIL"] = "owner@example.com",
                 ["STAYPDF_TEST_PASSWORD"] = "would-be-a-password"
             }

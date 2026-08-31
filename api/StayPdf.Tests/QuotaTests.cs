@@ -39,13 +39,16 @@ public class QuotaTests
         var register = await client.PostAsJsonAsync("/api/auth/register", new
         {
             email = "pro.user@example.com",
-            password = "a-strong-password"
+            password = "a-strong-password1"
         });
         Assert.Equal(HttpStatusCode.OK, register.StatusCode);
+        Assert.False(AuthHelpers.HasSessionCookie(register));
 
+        string token;
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var mail = scope.ServiceProvider.GetRequiredService<StayPdf.Api.Auth.IEmailSender>();
             var user = await db.Users.SingleAsync(u => u.Email == "pro.user@example.com");
             db.Licenses.Add(new License
             {
@@ -54,12 +57,16 @@ public class QuotaTests
                 GrantedAt = DateTimeOffset.UtcNow
             });
             await db.SaveChangesAsync();
+            token = AuthHelpers.TokenFromUrl(mail.LastVerifyUrl);
         }
+
+        var verify = await client.PostAsJsonAsync("/api/auth/verify", new { token });
+        Assert.Equal(HttpStatusCode.OK, verify.StatusCode);
 
         var login = await client.PostAsJsonAsync("/api/auth/login", new
         {
             email = "pro.user@example.com",
-            password = "a-strong-password"
+            password = "a-strong-password1"
         });
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
 

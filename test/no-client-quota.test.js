@@ -21,5 +21,9 @@ describe('gated tools use the API', () => {
     assert.match(api, /\/api\/jobs\//);
     assert.doesNotMatch(app, /unlockDemoPro/);
     assert.doesNotMatch(api, /unlockDemoPro/);
+    assert.match(app, /#\/register/);
+    assert.match(app, /['"]\/verify['"]/);
+    assert.match(api, /\/api\/auth\/register/);
+    assert.match(api, /\/api\/auth\/verify/);
   });
 });

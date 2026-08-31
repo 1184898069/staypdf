@@ -1,14 +1,50 @@
 import { t, getLang, setLang } from './i18n.js';
 import { parsePageRanges } from './lib/ranges.js';
 import { downloadBytes, escapeHtml, isPdfFile, isImageFile } from './lib/download.js';
-import { getApiUrl, getMe, login, logout, postJob } from './lib/api.js';
+import { getApiUrl, getMe, getTurnstileSiteKey, login, logout, postJob, register, resendVerification, verifyEmail } from './lib/api.js';
 
-const ROUTES = ['/', '/merge', '/split', '/rotate', '/delete', '/images', '/login'];
+const ROUTES = ['/', '/merge', '/split', '/rotate', '/delete', '/images', '/login', '/register', '/verify'];
 
 function routeFromHash() {
   const raw = (location.hash || '#/').replace(/^#/, '');
   const path = raw.split('?')[0] || '/';
   return ROUTES.includes(path) ? path : '/';
+}
+
+function queryFromHash() {
+  const raw = (location.hash || '#/').replace(/^#/, '');
+  const q = raw.includes('?') ? raw.slice(raw.indexOf('?') + 1) : '';
+  return new URLSearchParams(q);
+}
+
+function passwordOk(value) {
+  return value.length >= 10 && /[A-Za-z]/.test(value) && /\d/.test(value);
+}
+
+let turnstileScript = null;
+function ensureTurnstile(siteKey, onToken) {
+  const mount = document.getElementById('turnstile-slot');
+  if (!mount || !siteKey) return;
+  const render = () => {
+    if (!window.turnstile) return;
+    mount.innerHTML = '';
+    window.turnstile.render(mount, {
+      sitekey: siteKey,
+      theme: 'dark',
+      callback: onToken,
+    });
+  };
+  if (window.turnstile) {
+    render();
+    return;
+  }
+  if (!turnstileScript) {
+    turnstileScript = document.createElement('script');
+    turnstileScript.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    turnstileScript.async = true;
+    document.head.appendChild(turnstileScript);
+  }
+  turnstileScript.addEventListener('load', render, { once: true });
 }
 
 function markSvg() {
@@ -35,6 +71,9 @@ export function createApp(root) {
     ranges: '',
     email: '',
     password: '',
+    confirmPassword: '',
+    turnstileToken: '',
+    verifyOnce: false,
     session: {
       loaded: false,
       apiConfigured: Boolean(getApiUrl()),
@@ -86,6 +125,12 @@ export function createApp(root) {
       'out-of-range': t('outOfRange'),
       image: t('imageFailed'),
       auth: t('authFailed'),
+      register: t('registerFailed'),
+      verify: t('verifyFail'),
+      'try-later': t('tryLater'),
+      mail: t('mailDown'),
+      mismatch: t('passwordMismatch'),
+      weak: t('weakPassword'),
       'run-local': t('runLocally'),
       'too-large': t('tooLarge'),
       'too-many': t('tooMany'),
@@ -391,6 +436,63 @@ export function createApp(root) {
             <button class="btn primary" type="submit" ${state.busy ? 'disabled' : ''}>${escapeHtml(t('loginSubmit'))}</button>
           </div>
         </form>
+        <p class="auth-switch"><a href="#/register" data-nav="/register">${escapeHtml(t('needAccount'))}</a></p>
+        ${status()}
+      </div>
+      ${footer()}`;
+  }
+
+  function registerView() {
+    const siteKey = getTurnstileSiteKey();
+    const widget = siteKey ? '<div id="turnstile-slot" class="turnstile"></div>' : '';
+    return `${header()}
+      <a class="crumb" href="#/" data-nav="/">${escapeHtml(t('back'))}</a>
+      <div class="panel">
+        <h1 class="tool-title">${escapeHtml(t('registerTitle'))}</h1>
+        <p class="lede">${escapeHtml(t('registerBody'))}</p>
+        <form id="register-form" class="login-form">
+          <div class="sr" aria-hidden="true">
+            <label>Company
+              <input id="company" type="text" name="company" tabindex="-1" autocomplete="off" />
+            </label>
+          </div>
+          <label class="field">${escapeHtml(t('email'))}
+            <input id="email" type="email" autocomplete="username" value="${escapeHtml(state.email)}" required />
+          </label>
+          <label class="field">${escapeHtml(t('password'))}
+            <input id="password" type="password" autocomplete="new-password" value="${escapeHtml(state.password)}" required />
+          </label>
+          <label class="field">${escapeHtml(t('confirmPassword'))}
+            <input id="confirm" type="password" autocomplete="new-password" value="${escapeHtml(state.confirmPassword)}" required />
+          </label>
+          <p class="hint">${escapeHtml(t('passwordHint'))}</p>
+          ${widget}
+          <div class="row">
+            <button class="btn primary" type="submit" ${state.busy ? 'disabled' : ''}>${escapeHtml(t('registerSubmit'))}</button>
+          </div>
+        </form>
+        <p class="auth-switch"><a href="#/login" data-nav="/login">${escapeHtml(t('haveAccount'))}</a></p>
+        ${status()}
+      </div>
+      ${footer()}`;
+  }
+
+  function verifyView() {
+    return `${header()}
+      <a class="crumb" href="#/" data-nav="/">${escapeHtml(t('back'))}</a>
+      <div class="panel">
+        <h1 class="tool-title">${escapeHtml(t('verifyTitle'))}</h1>
+        <p class="lede">${escapeHtml(state.messageKind === 'ok' ? t('verifyOk') : state.messageKind === 'err' ? t('verifyFail') : t('verifyWorking'))}</p>
+        ${state.messageKind === 'ok' ? `<p class="auth-switch"><a href="#/login" data-nav="/login">${escapeHtml(t('login'))}</a></p>` : ''}
+        ${state.messageKind === 'err' ? `<p class="hint">${escapeHtml(t('resendHint'))}</p>
+        <form id="resend-form" class="login-form">
+          <label class="field">${escapeHtml(t('email'))}
+            <input id="email" type="email" autocomplete="username" value="${escapeHtml(state.email)}" required />
+          </label>
+          <div class="row">
+            <button class="btn primary" type="submit" ${state.busy ? 'disabled' : ''}>${escapeHtml(t('resend'))}</button>
+          </div>
+        </form>` : ''}
         ${status()}
       </div>
       ${footer()}`;
@@ -500,6 +602,105 @@ export function createApp(root) {
     });
   }
 
+  function bindRegister() {
+    const form = root.querySelector('#register-form');
+    if (!form) return;
+    const email = root.querySelector('#email');
+    const password = root.querySelector('#password');
+    const confirm = root.querySelector('#confirm');
+    if (email) email.addEventListener('input', () => { state.email = email.value; });
+    if (password) password.addEventListener('input', () => { state.password = password.value; });
+    if (confirm) confirm.addEventListener('input', () => { state.confirmPassword = confirm.value; });
+    const siteKey = getTurnstileSiteKey();
+    if (siteKey) {
+      ensureTurnstile(siteKey, (token) => { state.turnstileToken = token; });
+    }
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (state.busy) return;
+      if (!passwordOk(state.password)) {
+        fail('weak');
+        draw();
+        return;
+      }
+      if (state.password !== state.confirmPassword) {
+        fail('mismatch');
+        draw();
+        return;
+      }
+      const company = (root.querySelector('#company') || {}).value || '';
+      state.busy = true;
+      state.message = t('working');
+      state.messageKind = '';
+      draw();
+      try {
+        await register(state.email, state.password, {
+          company,
+          turnstile: state.turnstileToken,
+        });
+        state.password = '';
+        state.confirmPassword = '';
+        state.turnstileToken = '';
+        state.busy = false;
+        ok(t('checkEmail'));
+        draw();
+      } catch (err) {
+        fail((err && err.code) || 'register');
+        state.busy = false;
+        draw();
+      }
+    });
+  }
+
+  function bindVerify() {
+    const form = root.querySelector('#resend-form');
+    if (form) {
+      const email = root.querySelector('#email');
+      if (email) email.addEventListener('input', () => { state.email = email.value; });
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (state.busy) return;
+        state.busy = true;
+        state.message = t('working');
+        state.messageKind = '';
+        draw();
+        try {
+          await resendVerification(state.email);
+          state.busy = false;
+          ok(t('checkEmail'));
+          draw();
+        } catch (err) {
+          fail((err && err.code) || 'register');
+          state.busy = false;
+          draw();
+        }
+      });
+    }
+    if (state.verifyOnce) return;
+    state.verifyOnce = true;
+    const token = queryFromHash().get('token') || '';
+    if (!token) {
+      fail('verify');
+      draw();
+      return;
+    }
+    state.busy = true;
+    state.message = t('verifyWorking');
+    state.messageKind = '';
+    (async () => {
+      try {
+        await verifyEmail(token);
+        state.busy = false;
+        ok(t('verifyOk'));
+        draw();
+      } catch {
+        fail('verify');
+        state.busy = false;
+        draw();
+      }
+    })();
+  }
+
   function bindRun(route) {
     const run = root.querySelector('#run');
     if (!run) return;
@@ -538,7 +739,11 @@ export function createApp(root) {
 
   function draw() {
     const route = routeFromHash();
-    if (lastRoute && lastRoute !== route) resetToolState();
+    if (lastRoute && lastRoute !== route) {
+      resetToolState();
+      state.verifyOnce = false;
+      state.turnstileToken = '';
+    }
     lastRoute = route;
     const views = {
       '/': home,
@@ -548,12 +753,16 @@ export function createApp(root) {
       '/delete': deleteView,
       '/images': imagesView,
       '/login': loginView,
+      '/register': registerView,
+      '/verify': verifyView,
     };
     root.innerHTML = `<div class="app">${(views[route] || home)()}</div>`;
     bindCommon();
     if (route === '/merge') bindDrop('pdf');
     else if (route === '/images') bindDrop('image');
     else if (route === '/login') bindLogin();
+    else if (route === '/register') bindRegister();
+    else if (route === '/verify') bindVerify();
     else if (route !== '/') bindDrop('one-pdf');
     bindRun(route);
   }

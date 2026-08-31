@@ -28,7 +28,9 @@ public static class DevSeed
             {
                 Id = Guid.NewGuid(),
                 Email = email,
-                CreatedAt = DateTimeOffset.UtcNow
+                CreatedAt = DateTimeOffset.UtcNow,
+                EmailVerified = true,
+                EmailVerifiedAt = DateTimeOffset.UtcNow
             };
             user.PasswordHash = hasher.HashPassword(user, password);
             db.Users.Add(user);
@@ -36,6 +38,8 @@ public static class DevSeed
         else
         {
             user.PasswordHash = hasher.HashPassword(user, password);
+            user.EmailVerified = true;
+            user.EmailVerifiedAt ??= DateTimeOffset.UtcNow;
         }
 
         if (user.License is null)
