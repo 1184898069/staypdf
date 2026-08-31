@@ -1,14 +1,17 @@
-import { STORAGE_KEYS } from './lib/limit.js';
+const LANG_KEY = 'staypdf-lang';
 
 const STRINGS = {
   en: {
     brand: 'StayPDF',
-    tagline: 'PDF tools that never leave your browser.',
-    privacy: 'Processed in this tab, never uploaded.',
-    privacyProof: 'Your file is read with the File API, transformed by pdf-lib in this tab, then saved with a local download. No server, no account, no upload.',
+    tagline: 'PDF tools. Processed in memory, not stored.',
+    privacy: 'Processed in server memory, then discarded.',
+    privacyProof:
+      'Files are sent to the StayPDF API, transformed in memory, and the result is downloaded. Bytes are not written to disk and are not stored.',
     langZh: '中文',
     langEn: 'EN',
-    remaining: (n) => (n === Infinity ? 'Pro · unlimited' : `${n} free export${n === 1 ? '' : 's'} left today`),
+    remaining: (n) => `${n} free export${n === 1 ? '' : 's'} left today`,
+    remainingPro: 'Pro',
+    remainingUnknown: 'Sign in for unlimited exports',
     tools: 'Tools',
     home: 'All tools',
     merge: 'Merge PDFs',
@@ -59,26 +62,37 @@ const STRINGS = {
     encrypted: 'This PDF is encrypted. StayPDF cannot open password-protected files yet.',
     failed: 'Could not process this file. Try another PDF.',
     imageFailed: 'Could not read an image. Use JPG, PNG, or WebP.',
-    working: 'Working in this tab…',
-    done: 'Downloaded. Nothing was uploaded.',
-    paywallTitle: 'Free daily limit reached',
-    paywallBody:
-      'The free plan allows 3 successful exports per local calendar day. StayPDF Pro is $6/month for unlimited in-browser processing.',
-    paywallNote:
-      'Payments are not connected yet (Creem coming). Unlock demo Pro stores a flag in localStorage only — we will not charge you.',
-    unlockDemo: 'Unlock demo Pro',
+    working: 'Working…',
+    done: 'Downloaded. The upload was processed in memory and discarded.',
+    paywallTitle: 'Upgrade to continue',
+    paywallBody: 'StayPDF Pro is $6/month for unlimited exports. Payments are not connected yet.',
     close: 'Not now',
-    footer: 'MIT · Built to stay on your machine.',
+    footer: 'MIT · Files are not kept after the response is sent.',
     back: '← Tools',
+    login: 'Log in',
+    logout: 'Log out',
+    email: 'Email',
+    password: 'Password',
+    loginSubmit: 'Log in',
+    loginTitle: 'Log in',
+    loginBody: 'Use the account from your local .env to test Pro exports.',
+    authFailed: 'Could not sign in. Check the email and password.',
+    runLocally: 'Run locally to process files.',
+    apiDown: 'Cannot reach the StayPDF API. Start it locally to process files.',
+    tooLarge: 'Each file must be 15 MB or smaller.',
+    tooMany: 'Up to 10 files per request.',
   },
   zh: {
     brand: 'StayPDF',
-    tagline: 'PDF 处理不离开你的电脑。',
-    privacy: '在当前标签页处理，文件不会上传。',
-    privacyProof: '文件通过浏览器 File API 读取，由 pdf-lib 在本页转换，再本地下载保存。没有服务器、没有账号、不会上传。',
+    tagline: 'PDF 工具。在内存中处理，不落盘保存。',
+    privacy: '在服务器内存中处理，随后丢弃。',
+    privacyProof:
+      '文件发送到 StayPDF API，在内存中转换，再下载结果。不会写入磁盘，也不会存储。',
     langZh: '中文',
     langEn: 'EN',
-    remaining: (n) => (n === Infinity ? 'Pro · 不限次数' : `今日剩余 ${n} 次免费导出`),
+    remaining: (n) => `今日剩余 ${n} 次免费导出`,
+    remainingPro: 'Pro',
+    remainingUnknown: '登录后可不限次导出',
     tools: '工具',
     home: '全部工具',
     merge: '合并 PDF',
@@ -129,21 +143,31 @@ const STRINGS = {
     encrypted: '这份 PDF 已加密。StayPDF 暂不支持带密码的文件。',
     failed: '无法处理该文件，请换一份 PDF 试试。',
     imageFailed: '无法读取图片。请使用 JPG、PNG 或 WebP。',
-    working: '正在此标签页处理…',
-    done: '已下载。全程未上传。',
-    paywallTitle: '今日免费次数已用完',
-    paywallBody: '免费版每个本地日历日可成功导出 3 次。StayPDF Pro 为 $6/月，不限次数，仍在浏览器内处理。',
-    paywallNote: '支付尚未接入（即将使用 Creem）。「解锁演示 Pro」只在 localStorage 写入标记，不会产生任何扣费。',
-    unlockDemo: '解锁演示 Pro',
+    working: '处理中…',
+    done: '已下载。上传内容在内存中处理并已丢弃。',
+    paywallTitle: '升级后继续',
+    paywallBody: 'StayPDF Pro 为 $6/月，不限次数。支付尚未接入。',
     close: '稍后再说',
-    footer: 'MIT · 文件留在你的电脑上。',
+    footer: 'MIT · 响应发送后不保留文件。',
     back: '← 全部工具',
+    login: '登录',
+    logout: '退出',
+    email: '邮箱',
+    password: '密码',
+    loginSubmit: '登录',
+    loginTitle: '登录',
+    loginBody: '使用本地 .env 中的账号测试 Pro 导出。',
+    authFailed: '无法登录，请检查邮箱和密码。',
+    runLocally: '请在本地运行后再处理文件。',
+    apiDown: '无法连接 StayPDF API。请先在本地启动后再处理文件。',
+    tooLarge: '每个文件不能超过 15 MB。',
+    tooMany: '每次最多 10 个文件。',
   },
 };
 
 function detectLang() {
   try {
-    const saved = localStorage.getItem(STORAGE_KEYS.LANG);
+    const saved = localStorage.getItem(LANG_KEY);
     if (saved === 'zh' || saved === 'en') return saved;
   } catch {
     /* ignore */
@@ -161,7 +185,7 @@ export function getLang() {
 export function setLang(next) {
   lang = next === 'zh' ? 'zh' : 'en';
   try {
-    localStorage.setItem(STORAGE_KEYS.LANG, lang);
+    localStorage.setItem(LANG_KEY, lang);
   } catch {
     /* ignore */
   }

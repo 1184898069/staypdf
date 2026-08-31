@@ -289,14 +289,14 @@ label.field {
   font-size: 13px;
   color: var(--muted);
 }
-input[type="text"], select {
+input[type="text"], input[type="email"], input[type="password"], select {
   background: var(--bg);
   border: 1px solid var(--line-2);
   border-radius: 10px;
   padding: 10px 12px;
   outline: none;
 }
-input[type="text"]:focus, select:focus { border-color: var(--accent); }
+input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus, select:focus { border-color: var(--accent); }
 .angles {
   display: flex;
   gap: 8px;
@@ -369,3 +369,7 @@ input[type="text"]:focus, select:focus { border-color: var(--accent); }
   .top { align-items: flex-start; flex-direction: column; }
   .item { grid-template-columns: 1fr; }
 }
+
+.btn.small { padding: 6px 10px; font-size: 13px; }
+.who { font-size: 13px; color: var(--muted); max-width: 18ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.login-form { max-width: 360px; }

@@ -1,18 +1,9 @@
 import { t, getLang, setLang } from './i18n.js';
-import { parsePageRanges, allPageNumbers } from './lib/ranges.js';
+import { parsePageRanges } from './lib/ranges.js';
 import { downloadBytes, escapeHtml, isPdfFile, isImageFile } from './lib/download.js';
-import {
-  getPageCount,
-  mergePdfs,
-  splitPdf,
-  rotatePdf,
-  deletePages,
-  imagesToPdf,
-  errorCode,
-  stem,
-} from './pdf/ops.js';
+import { getApiUrl, getMe, login, logout, postJob } from './lib/api.js';
 
-const ROUTES = ['/', '/merge', '/split', '/rotate', '/delete', '/images'];
+const ROUTES = ['/', '/merge', '/split', '/rotate', '/delete', '/images', '/login'];
 
 function routeFromHash() {
   const raw = (location.hash || '#/').replace(/^#/, '');
@@ -27,10 +18,14 @@ function markSvg() {
   </svg>`;
 }
 
-export function createApp(root, limiter) {
+function stem(filename, fallback = 'document') {
+  const base = String(filename || fallback).replace(/\.[^.]+$/, '');
+  return base || fallback;
+}
+
+export function createApp(root) {
   const state = {
     files: [],
-    counts: new Map(),
     message: '',
     messageKind: '',
     busy: false,
@@ -38,6 +33,17 @@ export function createApp(root, limiter) {
     angle: 90,
     fit: 'a4',
     ranges: '',
+    email: '',
+    password: '',
+    session: {
+      loaded: false,
+      apiConfigured: Boolean(getApiUrl()),
+      apiReachable: false,
+      authenticated: false,
+      email: '',
+      isPro: false,
+      remaining: null,
+    },
   };
 
   function navigate(path) {
@@ -47,7 +53,6 @@ export function createApp(root, limiter) {
 
   function resetToolState() {
     state.files = [];
-    state.counts = new Map();
     state.message = '';
     state.messageKind = '';
     state.busy = false;
@@ -56,34 +61,16 @@ export function createApp(root, limiter) {
     state.ranges = '';
   }
 
-  async function countPdf(file) {
-    try {
-      const n = await getPageCount(file);
-      state.counts.set(file, n);
-    } catch (err) {
-      state.counts.set(file, null);
-      const code = errorCode(err);
-      fail(code);
-    }
-    draw();
-  }
-
   function addFiles(list, kind) {
     const incoming = Array.from(list || []);
     const accepted = incoming.filter((f) => (kind === 'image' ? isImageFile(f) : isPdfFile(f)));
     if (kind === 'one-pdf') {
       const first = accepted[0];
-      if (first) {
-        state.files = [first];
-        state.counts = new Map();
-        countPdf(first);
-      }
+      if (first) state.files = [first];
+      draw();
       return;
     }
-    for (const f of accepted) {
-      state.files.push(f);
-      if (kind === 'pdf') countPdf(f);
-    }
+    for (const f of accepted) state.files.push(f);
     draw();
   }
 
@@ -98,6 +85,10 @@ export function createApp(root, limiter) {
       'bad-range': t('badRange'),
       'out-of-range': t('outOfRange'),
       image: t('imageFailed'),
+      auth: t('authFailed'),
+      'run-local': t('runLocally'),
+      'too-large': t('tooLarge'),
+      'too-many': t('tooMany'),
     };
     state.messageKind = 'err';
     state.message = map[code] || t('failed');
@@ -108,10 +99,49 @@ export function createApp(root, limiter) {
     state.message = text;
   }
 
-  async function runExport(work, filename) {
+  async function refreshSession() {
+    if (!getApiUrl()) {
+      state.session = {
+        loaded: true,
+        apiConfigured: false,
+        apiReachable: false,
+        authenticated: false,
+        email: '',
+        isPro: false,
+        remaining: null,
+      };
+      draw();
+      return;
+    }
+    try {
+      const me = await getMe();
+      state.session = {
+        loaded: true,
+        apiConfigured: true,
+        apiReachable: true,
+        authenticated: Boolean(me.authenticated),
+        email: me.email || '',
+        isPro: Boolean(me.isPro),
+        remaining: me.isPro ? null : me.remaining,
+      };
+    } catch {
+      state.session = {
+        loaded: true,
+        apiConfigured: true,
+        apiReachable: false,
+        authenticated: false,
+        email: '',
+        isPro: false,
+        remaining: null,
+      };
+    }
+    draw();
+  }
+
+  async function runExport(kind, files, fields, filename) {
     if (state.busy) return;
-    if (!limiter.canExport()) {
-      state.paywall = true;
+    if (!getApiUrl()) {
+      fail('run-local');
       draw();
       return;
     }
@@ -120,31 +150,44 @@ export function createApp(root, limiter) {
     state.message = t('working');
     draw();
     try {
-      const bytes = await work();
-      const recorded = limiter.recordExport();
-      if (!recorded.ok) {
-        state.paywall = true;
-        state.busy = false;
-        draw();
-        return;
-      }
+      const bytes = await postJob(kind, files, fields);
       downloadBytes(bytes, filename);
       ok(t('done'));
+      await refreshSession();
     } catch (err) {
-      fail(errorCode(err));
+      if (err && err.code === 'plan') {
+        state.paywall = true;
+        state.messageKind = '';
+        state.message = '';
+      } else {
+        fail((err && err.code) || 'failed');
+      }
     } finally {
       state.busy = false;
       draw();
     }
   }
 
+  function remainingLabel() {
+    const s = state.session;
+    if (!s.apiConfigured) return t('runLocally');
+    if (!s.apiReachable) return t('apiDown');
+    if (s.isPro) return t('remainingPro');
+    if (typeof s.remaining === 'number') return t('remaining', s.remaining);
+    return t('remainingUnknown');
+  }
+
   function header() {
-    const remaining = limiter.getRemaining();
     const lang = getLang();
+    const s = state.session;
+    const account = s.authenticated
+      ? `<span class="who">${escapeHtml(s.email)}</span><button type="button" class="btn ghost small" id="logout">${escapeHtml(t('logout'))}</button>`
+      : `<a class="btn ghost small" href="#/login" data-nav="/login">${escapeHtml(t('login'))}</a>`;
     return `<header class="top">
       <a class="brand" href="#/" data-nav="/">${markSvg()}<span class="word">StayPDF</span></a>
       <div class="top-right">
-        <div class="pill" id="remain">${escapeHtml(t('remaining', remaining))}</div>
+        <div class="pill" id="remain">${escapeHtml(remainingLabel())}</div>
+        ${account}
         <div class="lang" role="group" aria-label="language">
           <button type="button" data-lang="zh" class="${lang === 'zh' ? 'on' : ''}">${t('langZh')}</button>
           <button type="button" data-lang="en" class="${lang === 'en' ? 'on' : ''}">${t('langEn')}</button>
@@ -165,10 +208,8 @@ export function createApp(root, limiter) {
         <p>${escapeHtml(t('paywallBody'))}</p>
         <div class="price">$6 <span>/ mo</span></div>
         <div class="row">
-          <button class="btn primary" type="button" id="unlock">${escapeHtml(t('unlockDemo'))}</button>
           <button class="btn ghost" type="button" id="pw-close">${escapeHtml(t('close'))}</button>
         </div>
-        <p class="note">${escapeHtml(t('paywallNote'))}</p>
       </div>
     </div>`;
   }
@@ -181,17 +222,11 @@ export function createApp(root, limiter) {
     </div>`;
   }
 
-  function fileList(showPages) {
+  function fileList() {
     if (state.files.length === 0) return '';
     const rows = state.files
       .map((file, i) => {
-        const n = state.counts.get(file);
-        const pages =
-          showPages && n
-            ? `${n} ${n === 1 ? t('page') : t('pages')}`
-            : showPages && n === null
-              ? '—'
-              : `${Math.round(file.size / 1024)} KB`;
+        const pages = `${Math.round(file.size / 1024)} KB`;
         return `<div class="item" data-i="${i}">
           <div class="meta">
             <div class="name">${escapeHtml(file.name)}</div>
@@ -262,7 +297,7 @@ export function createApp(root, limiter) {
       'merge',
       'mergeDesc',
       `${dropzone(t('dropPdf'), true, 'application/pdf,.pdf')}
-       ${fileList(true)}
+       ${fileList()}
        <div class="row">
          <button class="btn primary" id="run" type="button" ${state.busy ? 'disabled' : ''}>${escapeHtml(t('runMerge'))}</button>
        </div>`,
@@ -274,7 +309,7 @@ export function createApp(root, limiter) {
       'split',
       'splitDesc',
       `${dropzone(t('dropPdfOne'), false, 'application/pdf,.pdf')}
-       ${fileList(true)}
+       ${fileList()}
        <label class="field">${escapeHtml(t('ranges'))}
          <input id="ranges" type="text" value="${escapeHtml(state.ranges)}" placeholder="${escapeHtml(t('rangesHint'))}" />
        </label>
@@ -289,7 +324,7 @@ export function createApp(root, limiter) {
       'rotate',
       'rotateDesc',
       `${dropzone(t('dropPdfOne'), false, 'application/pdf,.pdf')}
-       ${fileList(true)}
+       ${fileList()}
        <label class="field">${escapeHtml(t('ranges'))}
          <input id="ranges" type="text" value="${escapeHtml(state.ranges)}" placeholder="${escapeHtml(t('rangesAllHint'))}" />
        </label>
@@ -311,7 +346,7 @@ export function createApp(root, limiter) {
       'delete',
       'deleteDesc',
       `${dropzone(t('dropPdfOne'), false, 'application/pdf,.pdf')}
-       ${fileList(true)}
+       ${fileList()}
        <label class="field">${escapeHtml(t('ranges'))}
          <input id="ranges" type="text" value="${escapeHtml(state.ranges)}" placeholder="${escapeHtml(t('rangesHint'))}" />
        </label>
@@ -326,7 +361,7 @@ export function createApp(root, limiter) {
       'images',
       'imagesDesc',
       `${dropzone(t('dropImages'), true, 'image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp')}
-       ${fileList(false)}
+       ${fileList()}
        <label class="field">${escapeHtml(t('fitA4'))}
          <select id="fit">
            <option value="a4" ${state.fit === 'a4' ? 'selected' : ''}>${escapeHtml(t('fitA4'))}</option>
@@ -337,6 +372,28 @@ export function createApp(root, limiter) {
          <button class="btn primary" id="run" type="button" ${state.busy ? 'disabled' : ''}>${escapeHtml(t('runImages'))}</button>
        </div>`,
     );
+  }
+
+  function loginView() {
+    return `${header()}
+      <a class="crumb" href="#/" data-nav="/">${escapeHtml(t('back'))}</a>
+      <div class="panel">
+        <h1 class="tool-title">${escapeHtml(t('loginTitle'))}</h1>
+        <p class="lede">${escapeHtml(t('loginBody'))}</p>
+        <form id="login-form" class="login-form">
+          <label class="field">${escapeHtml(t('email'))}
+            <input id="email" type="email" autocomplete="username" value="${escapeHtml(state.email)}" required />
+          </label>
+          <label class="field">${escapeHtml(t('password'))}
+            <input id="password" type="password" autocomplete="current-password" value="${escapeHtml(state.password)}" required />
+          </label>
+          <div class="row">
+            <button class="btn primary" type="submit" ${state.busy ? 'disabled' : ''}>${escapeHtml(t('loginSubmit'))}</button>
+          </div>
+        </form>
+        ${status()}
+      </div>
+      ${footer()}`;
   }
 
   function bindCommon() {
@@ -354,17 +411,15 @@ export function createApp(root, limiter) {
         navigate(path);
       });
     });
-    const unlock = root.querySelector('#unlock');
-    if (unlock) {
-      unlock.addEventListener('click', () => {
-        limiter.unlockDemoPro();
-        state.paywall = false;
-        ok(t('remaining', limiter.getRemaining()));
-        draw();
-      });
-    }
     const close = root.querySelector('#pw-close');
     if (close) close.addEventListener('click', () => { state.paywall = false; draw(); });
+    const out = root.querySelector('#logout');
+    if (out) {
+      out.addEventListener('click', async () => {
+        try { await logout(); } catch { /* ignore */ }
+        await refreshSession();
+      });
+    }
   }
 
   function bindDrop(kind) {
@@ -417,15 +472,32 @@ export function createApp(root, limiter) {
     });
   }
 
-  function pagesFor(file, required) {
-    const count = state.counts.get(file);
-    if (!count) return { ok: false, error: 'need-one' };
-    if (!required && !state.ranges.trim()) {
-      return { ok: true, pages: allPageNumbers(count) };
-    }
-    const parsed = parsePageRanges(state.ranges, count);
-    if (!parsed.ok) return parsed;
-    return parsed;
+  function bindLogin() {
+    const form = root.querySelector('#login-form');
+    if (!form) return;
+    const email = root.querySelector('#email');
+    const password = root.querySelector('#password');
+    if (email) email.addEventListener('input', () => { state.email = email.value; });
+    if (password) password.addEventListener('input', () => { state.password = password.value; });
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (state.busy) return;
+      state.busy = true;
+      state.message = t('working');
+      state.messageKind = '';
+      draw();
+      try {
+        await login(state.email, state.password);
+        state.password = '';
+        state.busy = false;
+        await refreshSession();
+        navigate('/');
+      } catch {
+        fail('auth');
+        state.busy = false;
+        draw();
+      }
+    });
   }
 
   function bindRun(route) {
@@ -434,28 +506,30 @@ export function createApp(root, limiter) {
     run.addEventListener('click', async () => {
       if (route === '/merge') {
         if (state.files.length < 2) return fail('need-two'), draw();
-        await runExport(() => mergePdfs(state.files), 'merged.pdf');
+        await runExport('merge', state.files, {}, 'merged.pdf');
       } else if (route === '/split') {
         const file = state.files[0];
         if (!file) return fail('need-one'), draw();
-        const parsed = pagesFor(file, true);
+        const parsed = parsePageRanges(state.ranges, 9999);
         if (!parsed.ok) return fail(parsed.error === 'empty' ? 'bad-range' : parsed.error), draw();
-        await runExport(() => splitPdf(file, parsed.pages), `${stem(file.name)}-extract.pdf`);
+        await runExport('split', [file], { ranges: state.ranges }, `${stem(file.name)}-extract.pdf`);
       } else if (route === '/rotate') {
         const file = state.files[0];
         if (!file) return fail('need-one'), draw();
-        const parsed = pagesFor(file, false);
-        if (!parsed.ok) return fail(parsed.error === 'empty' ? 'bad-range' : parsed.error), draw();
-        await runExport(() => rotatePdf(file, parsed.pages, state.angle), `${stem(file.name)}-rotated.pdf`);
+        if (state.ranges.trim()) {
+          const parsed = parsePageRanges(state.ranges, 9999);
+          if (!parsed.ok) return fail(parsed.error === 'empty' ? 'bad-range' : parsed.error), draw();
+        }
+        await runExport('rotate', [file], { ranges: state.ranges, angle: state.angle }, `${stem(file.name)}-rotated.pdf`);
       } else if (route === '/delete') {
         const file = state.files[0];
         if (!file) return fail('need-one'), draw();
-        const parsed = pagesFor(file, true);
+        const parsed = parsePageRanges(state.ranges, 9999);
         if (!parsed.ok) return fail(parsed.error === 'empty' ? 'bad-range' : parsed.error), draw();
-        await runExport(() => deletePages(file, parsed.pages), `${stem(file.name)}-deleted.pdf`);
+        await runExport('delete', [file], { ranges: state.ranges }, `${stem(file.name)}-deleted.pdf`);
       } else if (route === '/images') {
         if (state.files.length === 0) return fail('need-image'), draw();
-        await runExport(() => imagesToPdf(state.files, state.fit), 'images.pdf');
+        await runExport('images', state.files, { fit: state.fit }, 'images.pdf');
       }
     });
   }
@@ -473,16 +547,19 @@ export function createApp(root, limiter) {
       '/rotate': rotateView,
       '/delete': deleteView,
       '/images': imagesView,
+      '/login': loginView,
     };
     root.innerHTML = `<div class="app">${(views[route] || home)()}</div>`;
     bindCommon();
     if (route === '/merge') bindDrop('pdf');
     else if (route === '/images') bindDrop('image');
+    else if (route === '/login') bindLogin();
     else if (route !== '/') bindDrop('one-pdf');
     bindRun(route);
   }
 
   window.addEventListener('hashchange', draw);
   draw();
+  refreshSession();
   return { draw };
 }

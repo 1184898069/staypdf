@@ -3,3 +3,9 @@ dist
 .DS_Store
 *.log
 .vite
+.env
+bin/
+obj/
+*.db
+*.db-shm
+*.db-wal

@@ -1,36 +1,32 @@
 # StayPDF
 
-EN: PDF tools that never leave your browser.
-ZH: PDF 处理不离开你的电脑。
+EN: PDF tools. Files are processed in server memory and discarded.
+ZH: PDF 工具。文件在服务器内存中处理，不落盘保存。
 
 Live site: https://1184898069.github.io/staypdf/
 
-StayPDF is a privacy-first alternative to Smallpdf and iLovePDF. Files are read in the current tab with the File API, processed with pdf-lib, and saved with a local download. Nothing is uploaded. There is no backend for PDF processing.
+The GitHub Pages build is a landing + app. Configure VITE_API_URL to talk to your API. If the API URL is not set, the UI asks you to run locally to process files.
 
-## Why vs Smallpdf / iLovePDF
+## Run locally / 本地运行
 
-Those products send your document to a server. StayPDF never does. Merge, split, rotate, delete, and images-to-PDF all run in JavaScript in your browser. The one-line proof in the UI is literal: processed in this tab, never uploaded.
+```
+cp .env.example .env
+dotnet run --project api/StayPdf.Api
+npm run dev
+```
 
-## Tools (v0.1)
+Fill the values listed in .env.example, then log in on the site with that email and password.
 
-- Merge 2+ PDFs: Free
-- Split (extract page ranges): Free
-- Rotate pages: Free
-- Delete pages: Free
-- Images to PDF: Free
-- Compress / OCR / Word convert: Pro coming (not in v1)
+ZH: 先填写 .env.example 复制出的 .env，再在站点登录。Development 下该测试账号为 Pro。
 
-Free plan: 3 successful exports per local calendar day (stored in localStorage). The 4th export shows a paywall card.
-
-Pro is 6 USD per month unlimited. Payment (Creem) is not connected yet. Use Unlock demo Pro to set a local flag and preview unlimited exports. StayPDF will not charge you; there is no fake checkout.
-
-## Develop
-
-Install dependencies, run the test suite, then start the Vite dev server. Build emits static files to dist/ and copies them to docs/ for GitHub Pages (main branch, docs folder). Hash routes: #/ #/merge #/split #/rotate #/delete #/images.
+Production requires JWT_SECRET of 32+ characters and does not create the test user.
 
 ## Tests
 
-The test suite uses Node built-in test runner for page-range parsing and daily-limit logic. No browser is required.
+```
+dotnet test
+npm test
+```
 
 ## License
 
