@@ -49,6 +49,17 @@ export async function getMe() {
   return res.json();
 }
 
+
+export async function getPlan() {
+  const res = await request("/api/plan");
+  if (!res.ok) {
+    const err = new Error("failed");
+    err.code = "failed";
+    throw err;
+  }
+  return res.json();
+}
+
 export async function login(email, password) {
   const res = await request('/api/auth/login', {
     method: 'POST',

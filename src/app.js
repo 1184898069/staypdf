@@ -1,9 +1,24 @@
 import { t, getLang, setLang } from './i18n.js';
 import { parsePageRanges } from './lib/ranges.js';
 import { downloadBytes, escapeHtml, isPdfFile, isImageFile, isDocxFile } from './lib/download.js';
-import { getApiUrl, getMe, getTurnstileSiteKey, login, logout, postJob, register, resendVerification, verifyEmail } from './lib/api.js';
+import { getApiUrl, getMe, getPlan, getTurnstileSiteKey, login, logout, postJob, register, resendVerification, verifyEmail } from './lib/api.js';
+import { LOCAL_TOOLS } from './lib/plan.js';
 
-const ROUTES = ['/', '/merge', '/split', '/rotate', '/delete', '/images', '/compress', '/ocr', '/word', '/login', '/register', '/verify'];
+const ROUTES = ['/', '/merge', '/split', '/rotate', '/delete', '/images', '/compress', '/ocr', '/word', '/watermark', '/pages', '/pdf-images', '/login', '/register', '/verify'];
+
+const TOOL_META = {
+  merge: { href: '/merge', title: 'merge', desc: 'mergeDesc' },
+  split: { href: '/split', title: 'split', desc: 'splitDesc' },
+  rotate: { href: '/rotate', title: 'rotate', desc: 'rotateDesc' },
+  delete: { href: '/delete', title: 'delete', desc: 'deleteDesc' },
+  images: { href: '/images', title: 'images', desc: 'imagesDesc' },
+  compress: { href: '/compress', title: 'compress', desc: 'compressDesc' },
+  ocr: { href: '/ocr', title: 'ocr', desc: 'ocrDesc' },
+  word: { href: '/word', title: 'word', desc: 'wordDesc' },
+  watermark: { href: '/watermark', title: 'watermark', desc: 'watermarkDesc' },
+  pages: { href: '/pages', title: 'pageNumbers', desc: 'pageNumbersDesc' },
+  'pdf-images': { href: '/pdf-images', title: 'pdfImages', desc: 'pdfImagesDesc' },
+};
 
 function routeFromHash() {
   const raw = (location.hash || '#/').replace(/^#/, '');
@@ -62,6 +77,7 @@ function stem(filename, fallback = 'document') {
 function mimeFor(filename) {
   const n = String(filename || '').toLowerCase();
   if (n.endsWith('.txt')) return 'text/plain;charset=utf-8';
+  if (n.endsWith('.zip')) return 'application/zip';
   if (n.endsWith('.docx')) {
     return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
   }
@@ -80,6 +96,8 @@ export function createApp(root) {
     quality: 'medium',
     ocrLang: 'eng+chi_sim',
     ranges: '',
+    watermarkText: '',
+    tools: LOCAL_TOOLS,
     email: '',
     password: '',
     confirmPassword: '',
@@ -111,6 +129,7 @@ export function createApp(root) {
     state.quality = 'medium';
     state.ocrLang = 'eng+chi_sim';
     state.ranges = '';
+    state.watermarkText = '';
   }
 
   function addFiles(list, kind) {
@@ -153,6 +172,7 @@ export function createApp(root) {
       'too-many': t('tooMany'),
       'ocr-engine': t('ocrEngine'),
       'need-doc': t('needDoc'),
+      'need-text': t('needText'),
     };
     state.messageKind = 'err';
     state.message = map[code] || t('failed');
@@ -161,6 +181,21 @@ export function createApp(root) {
   function ok(text) {
     state.messageKind = 'ok';
     state.message = text;
+  }
+
+  async function refreshPlan() {
+    if (!getApiUrl()) {
+      state.tools = LOCAL_TOOLS;
+      return;
+    }
+    try {
+      const plan = await getPlan();
+      if (plan && Array.isArray(plan.tools) && plan.tools.length) {
+        state.tools = plan.tools;
+      }
+    } catch {
+      state.tools = LOCAL_TOOLS;
+    }
   }
 
   async function refreshSession() {
@@ -174,11 +209,12 @@ export function createApp(root) {
         isPro: false,
         remaining: null,
       };
+      state.tools = LOCAL_TOOLS;
       draw();
       return;
     }
     try {
-      const me = await getMe();
+      const [me] = await Promise.all([getMe(), refreshPlan()]);
       state.session = {
         loaded: true,
         apiConfigured: true,
@@ -198,12 +234,25 @@ export function createApp(root) {
         isPro: false,
         remaining: null,
       };
+      await refreshPlan();
     }
     draw();
   }
 
+  function toolRequiresPro(id) {
+    const row = (state.tools || LOCAL_TOOLS).find((x) => x.id === id);
+    return Boolean(row && row.requiresPro);
+  }
+
   async function runExport(kind, files, fields, filename) {
     if (state.busy) return;
+    if (toolRequiresPro(kind) && state.session.loaded && !state.session.isPro) {
+      state.paywall = true;
+      state.messageKind = '';
+      state.message = '';
+      draw();
+      return;
+    }
     if (!getApiUrl()) {
       fail('run-local');
       draw();
@@ -315,34 +364,32 @@ export function createApp(root) {
     return `<div class="status${kind}" role="status">${escapeHtml(state.message)}</div>`;
   }
 
-  function home() {
-    const tools = [
-      ['/merge', 'merge', 'mergeDesc', ''],
-      ['/split', 'split', 'splitDesc', ''],
-      ['/rotate', 'rotate', 'rotateDesc', ''],
-      ['/delete', 'delete', 'deleteDesc', ''],
-      ['/images', 'images', 'imagesDesc', ''],
-      ['/compress', 'compress', 'compressDesc', 'advanced'],
-      ['/ocr', 'ocr', 'ocrDesc', 'advanced'],
-      ['/word', 'word', 'wordDesc', 'advanced'],
-    ];
-    const cards = tools
-      .map(([href, title, desc, badge]) => {
-        const mark = badge
-          ? `<span class="badge adv">${escapeHtml(t(badge))}</span>`
-          : `<span class="go">→</span>`;
-        const inner = `<h2>${escapeHtml(t(title))}</h2>
-          <p>${escapeHtml(t(desc))}</p>
+  function toolCard(tool) {
+    const meta = TOOL_META[tool.id];
+    if (!meta) return '';
+    const mark = tool.requiresPro
+      ? `<span class="badge">${escapeHtml(t('proBadge'))}</span>`
+      : `<span class="go">→</span>`;
+    const inner = `<h2>${escapeHtml(t(meta.title))}</h2>
+          <p>${escapeHtml(t(meta.desc))}</p>
           ${mark}`;
-        return `<a class="card" href="#${href}" data-nav="${href}">${inner}</a>`;
-      })
-      .join('');
+    return `<a class="card" href="#${meta.href}" data-nav="${meta.href}">${inner}</a>`;
+  }
+
+  function home() {
+    const tools = (state.tools && state.tools.length) ? state.tools : LOCAL_TOOLS;
+    const free = tools.filter((x) => !x.requiresPro).map(toolCard).join('');
+    const pro = tools.filter((x) => x.requiresPro).map(toolCard).join('');
     return `${header()}
       <section class="hero">
         <h1>${escapeHtml(t('tagline'))}</h1>
         <div class="proof"><span class="dot"></span><div><b>${escapeHtml(t('privacy'))}</b> ${escapeHtml(t('privacyProof'))}</div></div>
       </section>
-      <div class="grid">${cards}</div>
+      <p class="plan-line">${escapeHtml(t('planLine'))}</p>
+      <h2 class="group-title">${escapeHtml(t('freeTools'))}</h2>
+      <div class="grid">${free}</div>
+      <h2 class="group-title">${escapeHtml(t('proTools'))}</h2>
+      <div class="grid">${pro}</div>
       ${footer()}${paywallHtml()}`;
   }
 
@@ -487,6 +534,45 @@ export function createApp(root) {
        <p class="hint">${escapeHtml(t('wordHint'))}</p>
        <div class="row">
          <button class="btn primary" id="run" type="button" ${state.busy ? 'disabled' : ''}>${escapeHtml(t('runWord'))}</button>
+       </div>`,
+    );
+  }
+
+  function watermarkView() {
+    return toolChrome(
+      'watermark',
+      'watermarkDesc',
+      `${dropzone(t('dropPdfOne'), false, 'application/pdf,.pdf')}
+       ${fileList()}
+       <label class="field">${escapeHtml(t('watermarkText'))}
+         <input id="watermark-text" type="text" maxlength="80" value="${escapeHtml(state.watermarkText)}" />
+       </label>
+       <div class="row">
+         <button class="btn primary" id="run" type="button" ${state.busy ? 'disabled' : ''}>${escapeHtml(t('runWatermark'))}</button>
+       </div>`,
+    );
+  }
+
+  function pagesView() {
+    return toolChrome(
+      'pageNumbers',
+      'pageNumbersDesc',
+      `${dropzone(t('dropPdfOne'), false, 'application/pdf,.pdf')}
+       ${fileList()}
+       <div class="row">
+         <button class="btn primary" id="run" type="button" ${state.busy ? 'disabled' : ''}>${escapeHtml(t('runPages'))}</button>
+       </div>`,
+    );
+  }
+
+  function pdfImagesView() {
+    return toolChrome(
+      'pdfImages',
+      'pdfImagesDesc',
+      `${dropzone(t('dropPdfOne'), false, 'application/pdf,.pdf')}
+       ${fileList()}
+       <div class="row">
+         <button class="btn primary" id="run" type="button" ${state.busy ? 'disabled' : ''}>${escapeHtml(t('runPdfImages'))}</button>
        </div>`,
     );
   }
@@ -645,6 +731,8 @@ export function createApp(root) {
     if (quality) quality.addEventListener('change', () => { state.quality = quality.value; });
     const ocrLang = root.querySelector('#ocr-lang');
     if (ocrLang) ocrLang.addEventListener('change', () => { state.ocrLang = ocrLang.value; });
+    const watermarkText = root.querySelector('#watermark-text');
+    if (watermarkText) watermarkText.addEventListener('input', () => { state.watermarkText = watermarkText.value; });
     root.querySelectorAll('input[name="angle"]').forEach((el) => {
       el.addEventListener('change', () => { state.angle = Number(el.value); });
     });
@@ -822,6 +910,20 @@ export function createApp(root) {
           ? `${stem(file.name)}-converted.pdf`
           : `${stem(file.name)}-converted.docx`;
         await runExport('word', [file], {}, outName);
+      } else if (route === '/watermark') {
+        const file = state.files[0];
+        if (!file) return fail('need-one'), draw();
+        const text = (state.watermarkText || '').trim();
+        if (!text) return fail('need-text'), draw();
+        await runExport('watermark', [file], { text }, `${stem(file.name)}-watermark.pdf`);
+      } else if (route === '/pages') {
+        const file = state.files[0];
+        if (!file) return fail('need-one'), draw();
+        await runExport('pages', [file], {}, `${stem(file.name)}-pages.pdf`);
+      } else if (route === '/pdf-images') {
+        const file = state.files[0];
+        if (!file) return fail('need-one'), draw();
+        await runExport('pdf-images', [file], {}, `${stem(file.name)}-pages.zip`);
       }
     });
   }
@@ -846,6 +948,9 @@ export function createApp(root) {
       '/compress': compressView,
       '/ocr': ocrView,
       '/word': wordView,
+      '/watermark': watermarkView,
+      '/pages': pagesView,
+      '/pdf-images': pdfImagesView,
       '/login': loginView,
       '/register': registerView,
       '/verify': verifyView,

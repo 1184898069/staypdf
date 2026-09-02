@@ -297,7 +297,7 @@ public static class PdfProcessor
         }
     }
 
-    private static PdfDocument Open(byte[] bytes, PdfDocumentOpenMode mode)
+    internal static PdfDocument Open(byte[] bytes, PdfDocumentOpenMode mode)
     {
         try
         {
@@ -324,7 +324,7 @@ public static class PdfProcessor
                || msg.Contains("password", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static byte[] Save(PdfDocument doc)
+    internal static byte[] Save(PdfDocument doc)
     {
         using var output = new MemoryStream();
         doc.Save(output, false);

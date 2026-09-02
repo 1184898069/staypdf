@@ -1,11 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using StayPdf.Api.Data;
+using StayPdf.Api.Jobs;
 
 namespace StayPdf.Api.Auth;
 
 public sealed class QuotaService(AppDbContext db)
 {
-    public const int FreeDailyLimit = 3;
+    public static int FreeDailyLimit => PlanLimits.Free.DailyExports ?? 3;
 
     public static string UtcDay(DateTimeOffset? now = null) =>
         (now ?? DateTimeOffset.UtcNow).UtcDateTime.ToString("yyyy-MM-dd");

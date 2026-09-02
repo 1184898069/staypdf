@@ -50,15 +50,15 @@ builder.Services.Configure<FormOptions>(options =>
 {
     options.MemoryBufferThreshold = int.MaxValue;
     options.BufferBody = true;
-    options.BufferBodyLengthLimit = JobEndpoints.MaxFileBytes * JobEndpoints.MaxFiles + 1_048_576;
-    options.MultipartBodyLengthLimit = JobEndpoints.MaxFileBytes * JobEndpoints.MaxFiles + 1_048_576;
+    options.BufferBodyLengthLimit = PlanLimits.MaxRequestBodyBytes;
+    options.MultipartBodyLengthLimit = PlanLimits.MaxRequestBodyBytes;
     options.ValueLengthLimit = int.MaxValue;
     options.MultipartHeadersLengthLimit = 16_384;
 });
 
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.Limits.MaxRequestBodySize = JobEndpoints.MaxFileBytes * JobEndpoints.MaxFiles + 1_048_576;
+    options.Limits.MaxRequestBodySize = PlanLimits.MaxRequestBodyBytes;
 });
 
 var corsOrigins = (builder.Configuration["CORS_ORIGINS"]
@@ -141,6 +141,7 @@ app.Use(async (ctx, next) =>
 });
 
 app.MapGet("/health", () => Results.Json(new { ok = true }));
+app.MapGet("/api/plan", () => Results.Json(ToolCatalog.Snapshot()));
 app.MapAuth();
 app.MapJobs();
 

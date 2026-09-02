@@ -381,3 +381,17 @@ input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focu
 .auth-switch { margin-top: 14px; font-size: 14px; }
 .hint { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
 .turnstile { margin-top: 16px; min-height: 65px; }
+
+.plan-line {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0 0 22px;
+  max-width: 70ch;
+}
+.group-title {
+  font-family: var(--display);
+  font-size: 18px;
+  letter-spacing: -0.03em;
+  margin: 8px 0 12px;
+}
+.group-title + .grid { margin-bottom: 28px; }

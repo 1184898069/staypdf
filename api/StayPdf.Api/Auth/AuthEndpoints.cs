@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using StayPdf.Api.Data;
+using StayPdf.Api.Jobs;
 
 namespace StayPdf.Api.Auth;
 
@@ -184,7 +185,10 @@ public static class AuthEndpoints
             authenticated = actor.Authenticated,
             email = actor.Email,
             isPro = actor.IsPro,
-            remaining
+            remaining,
+            plan = actor.IsPro ? "pro" : "free",
+            limits = ToolCatalog.LimitsJson(actor.IsPro),
+            tools = ToolCatalog.ToolsJson()
         });
     }
 

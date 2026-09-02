@@ -48,6 +48,52 @@ public class DiskIsolationTests
         }
     }
 
+    [Fact]
+    public async Task Pro_watermark_does_not_write_pdf_bytes_under_temp_dir()
+    {
+        using var factory = new StayPdfFactory();
+        var scratch = factory.ScratchDir;
+        Directory.CreateDirectory(scratch);
+        var previous = new Dictionary<string, string?>
+        {
+            ["TMPDIR"] = Environment.GetEnvironmentVariable("TMPDIR"),
+            ["TMP"] = Environment.GetEnvironmentVariable("TMP"),
+            ["TEMP"] = Environment.GetEnvironmentVariable("TEMP")
+        };
+        Environment.SetEnvironmentVariable("TMPDIR", scratch);
+        Environment.SetEnvironmentVariable("TMP", scratch);
+        Environment.SetEnvironmentVariable("TEMP", scratch);
+        try
+        {
+            using var client = factory.CreateClient();
+            await AuthHelpers.SignInProAsync(factory, client, "disk.pro@example.com");
+            using var form = new MultipartFormDataContent();
+            PdfBytes.AddPdf(form, PdfBytes.Pages(2), "doc.pdf");
+            form.Add(new StringContent("CONFIDENTIAL"), "text");
+            var res = await client.PostAsync("/api/jobs/watermark", form);
+            Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+            var pdf = await res.Content.ReadAsByteArrayAsync();
+            Assert.True(pdf.Length > 4);
+            Assert.Equal("%PDF"u8.ToArray(), pdf.Take(4).ToArray());
+
+            var leftovers = Directory.Exists(scratch)
+                ? Directory.GetFiles(scratch, "*", SearchOption.AllDirectories)
+                : [];
+            Assert.DoesNotContain(leftovers, f => f.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase));
+            foreach (var path in leftovers)
+            {
+                Assert.False(LooksLikePdf(path), path);
+            }
+        }
+        finally
+        {
+            foreach (var (k, v) in previous)
+            {
+                Environment.SetEnvironmentVariable(k, v);
+            }
+        }
+    }
+
     private static bool LooksLikePdf(string path)
     {
         try
