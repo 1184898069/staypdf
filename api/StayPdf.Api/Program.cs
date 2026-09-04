@@ -12,6 +12,13 @@ EnvFile.LoadIfPresent();
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Railway / Fly / Render inject PORT. Prefer it so the container matches the host proxy.
+var listenPort = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(listenPort))
+{
+    builder.WebHost.UseUrls("http://0.0.0.0:" + listenPort);
+}
+
 var jwtSecret = builder.Configuration["JWT_SECRET"]
                 ?? Environment.GetEnvironmentVariable("JWT_SECRET")
                 ?? "";
@@ -38,6 +45,7 @@ if (string.IsNullOrEmpty(jwtSecret))
 }
 
 var sqlite = builder.Configuration.GetConnectionString("Default") ?? "Data Source=staypdf.db";
+EnsureSqliteDirectory(sqlite);
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlite(sqlite));
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<QuotaService>();
@@ -146,5 +154,18 @@ app.MapAuth();
 app.MapJobs();
 
 app.Run();
+
+static void EnsureSqliteDirectory(string connectionString)
+{
+    const string marker = "Data Source=";
+    var i = connectionString.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+    if (i < 0) return;
+    var path = connectionString[(i + marker.Length)..].Trim().Trim('"');
+    var semi = path.IndexOf(';');
+    if (semi >= 0) path = path[..semi];
+    if (string.IsNullOrWhiteSpace(path) || path is ":memory:") return;
+    var dir = Path.GetDirectoryName(Path.GetFullPath(path));
+    if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+}
 
 public partial class Program;

@@ -7,7 +7,13 @@ Live site: https://1184898069.github.io/staypdf/
 
 The GitHub Pages build is a landing + app. Configure VITE_API_URL to talk to your API. If the API URL is not set, the UI asks you to run locally to process files.
 
-Pages itself does not host the API.
+Pages itself does not host the API. **Income path needs a public API; Pages alone is not enough. / 变现需要公网 API，仅有 Pages 不够。**
+
+## Deploy / 部署
+
+See **[docs/DEPLOY.md](docs/DEPLOY.md)** for Docker, Railway (primary), Fly, env secrets, Turnstile, SMTP, and rebuilding Pages with `VITE_API_URL`.
+
+Artifacts: `api/StayPdf.Api/Dockerfile`, `docker-compose.yml`, `.env.production.example`. Payments/Creem stay paused.
 
 ## Free vs Pro
 
@@ -20,7 +26,7 @@ Compress rasterizes pages and JPEG-encodes them (image-heavy files shrink; vecto
 
 How to add a tool: docs/ADDING-A-TOOL.md
 
-Tesseract is optional (`tesseract-ocr`, `tesseract-ocr-eng`, `tesseract-ocr-chi-sim`); digital PDFs still extract without it.
+Tesseract is optional (`tesseract-ocr`, `tesseract-ocr-eng`, `tesseract-ocr-chi-sim`); digital PDFs still extract without it. The production Docker image installs these packages.
 
 ## Run locally / 本地运行
 

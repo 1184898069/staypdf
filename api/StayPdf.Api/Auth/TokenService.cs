@@ -31,23 +31,22 @@ public sealed class TokenService(IConfiguration config)
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    public static CookieOptions SessionCookie(bool production) => new()
-    {
-        HttpOnly = true,
-        IsEssential = true,
-        SameSite = SameSiteMode.Lax,
-        Secure = production,
-        Path = "/",
-        Expires = DateTimeOffset.UtcNow.AddDays(7)
-    };
+    /// <summary>
+    /// Production uses SameSite=None; Secure so GitHub Pages (cross-site) can send
+    /// the session cookie to the API. Testing/Development keep Lax (no Secure).
+    /// </summary>
+    public static CookieOptions SessionCookie(bool production) => Cookie(production, days: 7);
 
-    public static CookieOptions DeviceCookie(bool production) => new()
+    public static CookieOptions DeviceCookie(bool production) => Cookie(production, days: 365);
+
+    private static CookieOptions Cookie(bool production, int days) => new()
     {
         HttpOnly = true,
         IsEssential = true,
-        SameSite = SameSiteMode.Lax,
+        // Cross-origin Pages → API needs None+Secure; local/Testing stay Lax.
+        SameSite = production ? SameSiteMode.None : SameSiteMode.Lax,
         Secure = production,
         Path = "/",
-        Expires = DateTimeOffset.UtcNow.AddYears(1)
+        Expires = DateTimeOffset.UtcNow.AddDays(days)
     };
 }

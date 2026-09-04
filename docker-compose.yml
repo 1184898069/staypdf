@@ -1,0 +1,27 @@
+# Local prod-like smoke test of the API image.
+# Not required for GitHub Pages — Pages only needs a publicly reachable API URL.
+#
+#   cp .env.production.example .env.production   # then edit secrets
+#   docker compose --env-file .env.production up --build
+#
+# Or use the example file directly (placeholders only — replace before real use):
+#   docker compose up --build
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: api/StayPdf.Api/Dockerfile
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env.production.example
+    environment:
+      PORT: "8080"
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Default: "Data Source=/data/staypdf.db"
+    volumes:
+      - staypdf-data:/data
+
+volumes:
+  staypdf-data:

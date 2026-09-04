@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.AspNetCore.Http;
 using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -181,6 +182,36 @@ public class AuthTests
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         Assert.Equal(3, await db.Users.CountAsync());
         Assert.False(await db.Users.AnyAsync(u => u.Email == "n3@example.com"));
+    }
+
+
+    [Fact]
+    public void SessionCookie_production_is_none_and_secure()
+    {
+        var opts = TokenService.SessionCookie(production: true);
+        Assert.Equal(SameSiteMode.None, opts.SameSite);
+        Assert.True(opts.Secure);
+        Assert.True(opts.HttpOnly);
+    }
+
+    [Fact]
+    public void SessionCookie_testing_keeps_lax()
+    {
+        var opts = TokenService.SessionCookie(production: false);
+        Assert.Equal(SameSiteMode.Lax, opts.SameSite);
+        Assert.False(opts.Secure);
+        Assert.True(opts.HttpOnly);
+    }
+
+    [Fact]
+    public void DeviceCookie_matches_session_samesite_policy()
+    {
+        var prod = TokenService.DeviceCookie(production: true);
+        Assert.Equal(SameSiteMode.None, prod.SameSite);
+        Assert.True(prod.Secure);
+        var local = TokenService.DeviceCookie(production: false);
+        Assert.Equal(SameSiteMode.Lax, local.SameSite);
+        Assert.False(local.Secure);
     }
 
     [Fact]
