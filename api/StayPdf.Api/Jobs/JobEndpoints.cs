@@ -23,6 +23,7 @@ public static class JobEndpoints
         g.MapPost("/pages", Pages);
         g.MapPost("/pdf-images", PdfImages);
         g.MapPost("/protect", Protect);
+        g.MapPost("/unlock", Unlock);
     }
 
     private static Task<IResult> Merge(HttpContext ctx, AppDbContext db, QuotaService quota, CancellationToken ct) =>
@@ -166,6 +167,15 @@ public static class JobEndpoints
             var password = ctx.Request.Form["password"].ToString();
             var bytes = ProtectProcessor.Protect(files[0], password);
             return new JobFile(bytes, "application/pdf", Stem(ctx, "document") + "-protected.pdf");
+        });
+
+    private static Task<IResult> Unlock(HttpContext ctx, AppDbContext db, QuotaService quota, CancellationToken ct) =>
+        Run(ctx, db, quota, ct, "unlock", files =>
+        {
+            if (files.Count != 1) throw new PdfException("need-one", "Add a PDF first.");
+            var password = ctx.Request.Form["password"].ToString();
+            var bytes = UnlockProcessor.Unlock(files[0], password);
+            return new JobFile(bytes, "application/pdf", Stem(ctx, "document") + "-unlocked.pdf");
         });
 
     private static Task<IResult> Run(

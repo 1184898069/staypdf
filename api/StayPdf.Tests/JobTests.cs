@@ -64,6 +64,7 @@ public class JobTests
     [InlineData("pages")]
     [InlineData("pdf-images")]
     [InlineData("protect")]
+    [InlineData("unlock")]
     public async Task Anonymous_pro_tool_returns_402(string tool)
     {
         using var factory = new StayPdfFactory();
@@ -71,7 +72,7 @@ public class JobTests
         using var form = new MultipartFormDataContent();
         PdfBytes.AddPdf(form, PdfBytes.Pages(1), "doc.pdf");
         if (tool == "watermark") form.Add(new StringContent("CONFIDENTIAL"), "text");
-        if (tool == "protect") form.Add(new StringContent("secret123"), "password");
+        if (tool == "protect" || tool == "unlock") form.Add(new StringContent("secret123"), "password");
         var res = await client.PostAsync($"/api/jobs/{tool}", form);
         Assert.Equal(HttpStatusCode.PaymentRequired, res.StatusCode);
         var body = await res.Content.ReadAsStringAsync();
@@ -210,6 +211,7 @@ public class JobTests
             Assert.Contains(zip.Entries, e => e.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase));
         }
 
+        byte[] protectedPdf;
         using (var form = new MultipartFormDataContent())
         {
             PdfBytes.AddPdf(form, PdfBytes.Pages(2), "doc.pdf");
@@ -217,12 +219,70 @@ public class JobTests
             var res = await client.PostAsync("/api/jobs/protect", form);
             Assert.Equal(HttpStatusCode.OK, res.StatusCode);
             Assert.Equal("application/pdf", res.Content.Headers.ContentType?.MediaType);
-            var bytes = await res.Content.ReadAsByteArrayAsync();
+            protectedPdf = await res.Content.ReadAsByteArrayAsync();
             var openFail = Assert.ThrowsAny<Exception>(() =>
-                PdfReader.Open(new MemoryStream(bytes), PdfDocumentOpenMode.Import));
+                PdfReader.Open(new MemoryStream(protectedPdf), PdfDocumentOpenMode.Import));
             Assert.Contains("password", openFail.Message, StringComparison.OrdinalIgnoreCase);
-            using var unlocked = PdfReader.Open(new MemoryStream(bytes), "secret123", PdfDocumentOpenMode.Import);
+            using var unlocked = PdfReader.Open(new MemoryStream(protectedPdf), "secret123", PdfDocumentOpenMode.Import);
             Assert.Equal(2, unlocked.PageCount);
         }
+
+        using (var form = new MultipartFormDataContent())
+        {
+            PdfBytes.AddPdf(form, protectedPdf, "doc-protected.pdf");
+            form.Add(new StringContent("secret123"), "password");
+            var res = await client.PostAsync("/api/jobs/unlock", form);
+            Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+            Assert.Equal("application/pdf", res.Content.Headers.ContentType?.MediaType);
+            var bytes = await res.Content.ReadAsByteArrayAsync();
+            using var doc = PdfReader.Open(new MemoryStream(bytes), PdfDocumentOpenMode.Import);
+            Assert.Equal(2, doc.PageCount);
+        }
+    }
+
+    [Fact]
+    public async Task Pro_unlock_wrong_password_returns_bad_password()
+    {
+        using var factory = new StayPdfFactory();
+        using var client = factory.CreateClient();
+        await AuthHelpers.SignInProAsync(factory, client, "pro.unlock.bad@example.com");
+
+        byte[] protectedPdf;
+        using (var form = new MultipartFormDataContent())
+        {
+            PdfBytes.AddPdf(form, PdfBytes.Pages(1), "doc.pdf");
+            form.Add(new StringContent("secret123"), "password");
+            var res = await client.PostAsync("/api/jobs/protect", form);
+            Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+            protectedPdf = await res.Content.ReadAsByteArrayAsync();
+        }
+
+        using (var form = new MultipartFormDataContent())
+        {
+            PdfBytes.AddPdf(form, protectedPdf, "locked.pdf");
+            form.Add(new StringContent("not-the-password"), "password");
+            var res = await client.PostAsync("/api/jobs/unlock", form);
+            Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+            var body = await res.Content.ReadAsStringAsync();
+            Assert.Contains("\"code\":\"bad-password\"", body, StringComparison.Ordinal);
+            Assert.DoesNotContain("%PDF", body, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task Pro_unlock_plain_pdf_succeeds()
+    {
+        using var factory = new StayPdfFactory();
+        using var client = factory.CreateClient();
+        await AuthHelpers.SignInProAsync(factory, client, "pro.unlock.plain@example.com");
+
+        using var form = new MultipartFormDataContent();
+        PdfBytes.AddPdf(form, PdfBytes.Pages(3), "plain.pdf");
+        form.Add(new StringContent("any-password"), "password");
+        var res = await client.PostAsync("/api/jobs/unlock", form);
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        var bytes = await res.Content.ReadAsByteArrayAsync();
+        using var doc = PdfReader.Open(new MemoryStream(bytes), PdfDocumentOpenMode.Import);
+        Assert.Equal(3, doc.PageCount);
     }
 }

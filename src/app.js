@@ -4,7 +4,7 @@ import { downloadBytes, escapeHtml, isPdfFile, isImageFile, isDocxFile } from '.
 import { getApiUrl, getMe, getPlan, getTurnstileSiteKey, login, logout, postJob, register, resendVerification, verifyEmail } from './lib/api.js';
 import { LOCAL_TOOLS } from './lib/plan.js';
 
-const ROUTES = ['/', '/merge', '/split', '/rotate', '/delete', '/images', '/compress', '/ocr', '/word', '/watermark', '/pages', '/pdf-images', '/protect', '/login', '/register', '/verify'];
+const ROUTES = ['/', '/merge', '/split', '/rotate', '/delete', '/images', '/compress', '/ocr', '/word', '/watermark', '/pages', '/pdf-images', '/protect', '/unlock', '/login', '/register', '/verify'];
 
 const TOOL_META = {
   merge: { href: '/merge', title: 'merge', desc: 'mergeDesc' },
@@ -19,6 +19,7 @@ const TOOL_META = {
   pages: { href: '/pages', title: 'pageNumbers', desc: 'pageNumbersDesc' },
   'pdf-images': { href: '/pdf-images', title: 'pdfImages', desc: 'pdfImagesDesc' },
   protect: { href: '/protect', title: 'protect', desc: 'protectDesc' },
+  unlock: { href: '/unlock', title: 'unlock', desc: 'unlockDesc' },
 };
 
 function routeFromHash() {
@@ -100,6 +101,7 @@ export function createApp(root) {
     watermarkText: '',
     protectPassword: '',
     protectConfirm: '',
+    unlockPassword: '',
     tools: LOCAL_TOOLS,
     email: '',
     password: '',
@@ -135,6 +137,7 @@ export function createApp(root) {
     state.watermarkText = '';
     state.protectPassword = '';
     state.protectConfirm = '';
+    state.unlockPassword = '';
   }
 
   function addFiles(list, kind) {
@@ -178,6 +181,7 @@ export function createApp(root) {
       'need-doc': t('needDoc'),
       'need-text': t('needText'),
       'need-password': t('needPassword'),
+      'bad-password': t('badPassword'),
       mismatch: t('passwordMismatch'),
     };
     state.messageKind = 'err';
@@ -603,6 +607,21 @@ export function createApp(root) {
     );
   }
 
+  function unlockView() {
+    return toolChrome(
+      'unlock',
+      'unlockDesc',
+      `${dropzone(t('dropPdfOne'), false, 'application/pdf,.pdf')}
+       ${fileList()}
+       <label class="field">${escapeHtml(t('password'))}
+         <input id="unlock-password" type="password" autocomplete="current-password" maxlength="72" value="${escapeHtml(state.unlockPassword)}" />
+       </label>
+       <div class="row">
+         <button class="btn primary" id="run" type="button" ${state.busy ? 'disabled' : ''}>${escapeHtml(t('runUnlock'))}</button>
+       </div>`,
+    );
+  }
+
   function loginView() {
     return `${header()}
       <a class="crumb" href="#/" data-nav="/">${escapeHtml(t('back'))}</a>
@@ -763,6 +782,8 @@ export function createApp(root) {
     if (protectPassword) protectPassword.addEventListener('input', () => { state.protectPassword = protectPassword.value; });
     const protectConfirm = root.querySelector('#protect-confirm');
     if (protectConfirm) protectConfirm.addEventListener('input', () => { state.protectConfirm = protectConfirm.value; });
+    const unlockPassword = root.querySelector('#unlock-password');
+    if (unlockPassword) unlockPassword.addEventListener('input', () => { state.unlockPassword = unlockPassword.value; });
     root.querySelectorAll('input[name="angle"]').forEach((el) => {
       el.addEventListener('change', () => { state.angle = Number(el.value); });
     });
@@ -963,6 +984,13 @@ export function createApp(root) {
         await runExport('protect', [file], { password }, `${stem(file.name)}-protected.pdf`);
         state.protectPassword = '';
         state.protectConfirm = '';
+      } else if (route === '/unlock') {
+        const file = state.files[0];
+        if (!file) return fail('need-one'), draw();
+        const password = state.unlockPassword || '';
+        if (password.length < 1 || password.length > 72) return fail('need-password'), draw();
+        await runExport('unlock', [file], { password }, `${stem(file.name)}-unlocked.pdf`);
+        state.unlockPassword = '';
       }
     });
   }
@@ -991,6 +1019,7 @@ export function createApp(root) {
       '/pages': pagesView,
       '/pdf-images': pdfImagesView,
       '/protect': protectView,
+      '/unlock': unlockView,
       '/login': loginView,
       '/register': registerView,
       '/verify': verifyView,

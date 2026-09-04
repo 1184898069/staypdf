@@ -12,6 +12,7 @@ export const LOCAL_TOOLS = [
   { id: 'pages', requiresPro: true },
   { id: 'pdf-images', requiresPro: true },
   { id: 'protect', requiresPro: true },
+  { id: 'unlock', requiresPro: true },
 ];
 
 export const LOCAL_PLANS = {
