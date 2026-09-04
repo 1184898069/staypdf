@@ -28,7 +28,8 @@ public static class ToolCatalog
         new("word", true),
         new("watermark", true),
         new("pages", true),
-        new("pdf-images", true)
+        new("pdf-images", true),
+        new("protect", true)
     ];
 
     public static ToolDef Get(string id)

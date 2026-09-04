@@ -14,9 +14,9 @@ Pages itself does not host the API.
 Entitlement is decided on the server (License to actor.IsPro). There is no client unlock.
 
 - Free: 3 exports per UTC day; 15 MB / 10 files. Tools: merge, split, rotate, delete pages, images to PDF.
-- Pro: unlimited exports; 40 MB / 20 files. Extra tools: compress, OCR, PDF and Word, watermark, page numbers, PDF to images.
+- Pro: unlimited exports; 40 MB / 20 files. Extra tools: compress, OCR, PDF and Word, watermark, page numbers, PDF to images, password protect.
 
-Compress rasterizes pages and JPEG-encodes them (image-heavy files shrink; vector-only files may not). OCR extracts digital text with PdfPig and, when Tesseract is installed, OCRs scans. PDF and Word is text-based: tables, images, and complex layout are simplified. Payments are not connected yet.
+Compress rasterizes pages and JPEG-encodes them (image-heavy files shrink; vector-only files may not). OCR extracts digital text with PdfPig and, when Tesseract is installed, OCRs scans. PDF and Word is text-based: tables, images, and complex layout are simplified. Protect applies 128-bit encryption with a user password; other tools still cannot open encrypted PDFs. Payments are not connected yet.
 
 How to add a tool: docs/ADDING-A-TOOL.md
 

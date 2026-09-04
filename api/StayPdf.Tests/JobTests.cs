@@ -63,6 +63,7 @@ public class JobTests
     [InlineData("watermark")]
     [InlineData("pages")]
     [InlineData("pdf-images")]
+    [InlineData("protect")]
     public async Task Anonymous_pro_tool_returns_402(string tool)
     {
         using var factory = new StayPdfFactory();
@@ -70,6 +71,7 @@ public class JobTests
         using var form = new MultipartFormDataContent();
         PdfBytes.AddPdf(form, PdfBytes.Pages(1), "doc.pdf");
         if (tool == "watermark") form.Add(new StringContent("CONFIDENTIAL"), "text");
+        if (tool == "protect") form.Add(new StringContent("secret123"), "password");
         var res = await client.PostAsync($"/api/jobs/{tool}", form);
         Assert.Equal(HttpStatusCode.PaymentRequired, res.StatusCode);
         var body = await res.Content.ReadAsStringAsync();
@@ -206,6 +208,21 @@ public class JobTests
             using var zip = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
             Assert.True(zip.Entries.Count >= 1);
             Assert.Contains(zip.Entries, e => e.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase));
+        }
+
+        using (var form = new MultipartFormDataContent())
+        {
+            PdfBytes.AddPdf(form, PdfBytes.Pages(2), "doc.pdf");
+            form.Add(new StringContent("secret123"), "password");
+            var res = await client.PostAsync("/api/jobs/protect", form);
+            Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+            Assert.Equal("application/pdf", res.Content.Headers.ContentType?.MediaType);
+            var bytes = await res.Content.ReadAsByteArrayAsync();
+            var openFail = Assert.ThrowsAny<Exception>(() =>
+                PdfReader.Open(new MemoryStream(bytes), PdfDocumentOpenMode.Import));
+            Assert.Contains("password", openFail.Message, StringComparison.OrdinalIgnoreCase);
+            using var unlocked = PdfReader.Open(new MemoryStream(bytes), "secret123", PdfDocumentOpenMode.Import);
+            Assert.Equal(2, unlocked.PageCount);
         }
     }
 }

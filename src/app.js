@@ -4,7 +4,7 @@ import { downloadBytes, escapeHtml, isPdfFile, isImageFile, isDocxFile } from '.
 import { getApiUrl, getMe, getPlan, getTurnstileSiteKey, login, logout, postJob, register, resendVerification, verifyEmail } from './lib/api.js';
 import { LOCAL_TOOLS } from './lib/plan.js';
 
-const ROUTES = ['/', '/merge', '/split', '/rotate', '/delete', '/images', '/compress', '/ocr', '/word', '/watermark', '/pages', '/pdf-images', '/login', '/register', '/verify'];
+const ROUTES = ['/', '/merge', '/split', '/rotate', '/delete', '/images', '/compress', '/ocr', '/word', '/watermark', '/pages', '/pdf-images', '/protect', '/login', '/register', '/verify'];
 
 const TOOL_META = {
   merge: { href: '/merge', title: 'merge', desc: 'mergeDesc' },
@@ -18,6 +18,7 @@ const TOOL_META = {
   watermark: { href: '/watermark', title: 'watermark', desc: 'watermarkDesc' },
   pages: { href: '/pages', title: 'pageNumbers', desc: 'pageNumbersDesc' },
   'pdf-images': { href: '/pdf-images', title: 'pdfImages', desc: 'pdfImagesDesc' },
+  protect: { href: '/protect', title: 'protect', desc: 'protectDesc' },
 };
 
 function routeFromHash() {
@@ -97,6 +98,8 @@ export function createApp(root) {
     ocrLang: 'eng+chi_sim',
     ranges: '',
     watermarkText: '',
+    protectPassword: '',
+    protectConfirm: '',
     tools: LOCAL_TOOLS,
     email: '',
     password: '',
@@ -130,6 +133,8 @@ export function createApp(root) {
     state.ocrLang = 'eng+chi_sim';
     state.ranges = '';
     state.watermarkText = '';
+    state.protectPassword = '';
+    state.protectConfirm = '';
   }
 
   function addFiles(list, kind) {
@@ -165,7 +170,6 @@ export function createApp(root) {
       verify: t('verifyFail'),
       'try-later': t('tryLater'),
       mail: t('mailDown'),
-      mismatch: t('passwordMismatch'),
       weak: t('weakPassword'),
       'run-local': t('runLocally'),
       'too-large': t('tooLarge'),
@@ -173,6 +177,8 @@ export function createApp(root) {
       'ocr-engine': t('ocrEngine'),
       'need-doc': t('needDoc'),
       'need-text': t('needText'),
+      'need-password': t('needPassword'),
+      mismatch: t('passwordMismatch'),
     };
     state.messageKind = 'err';
     state.message = map[code] || t('failed');
@@ -577,6 +583,26 @@ export function createApp(root) {
     );
   }
 
+
+  function protectView() {
+    return toolChrome(
+      'protect',
+      'protectDesc',
+      `${dropzone(t('dropPdfOne'), false, 'application/pdf,.pdf')}
+       ${fileList()}
+       <label class="field">${escapeHtml(t('protectPassword'))}
+         <input id="protect-password" type="password" autocomplete="new-password" maxlength="72" value="${escapeHtml(state.protectPassword)}" />
+       </label>
+       <label class="field">${escapeHtml(t('protectConfirm'))}
+         <input id="protect-confirm" type="password" autocomplete="new-password" maxlength="72" value="${escapeHtml(state.protectConfirm)}" />
+       </label>
+       <p class="hint">${escapeHtml(t('protectHint'))}</p>
+       <div class="row">
+         <button class="btn primary" id="run" type="button" ${state.busy ? 'disabled' : ''}>${escapeHtml(t('runProtect'))}</button>
+       </div>`,
+    );
+  }
+
   function loginView() {
     return `${header()}
       <a class="crumb" href="#/" data-nav="/">${escapeHtml(t('back'))}</a>
@@ -733,6 +759,10 @@ export function createApp(root) {
     if (ocrLang) ocrLang.addEventListener('change', () => { state.ocrLang = ocrLang.value; });
     const watermarkText = root.querySelector('#watermark-text');
     if (watermarkText) watermarkText.addEventListener('input', () => { state.watermarkText = watermarkText.value; });
+    const protectPassword = root.querySelector('#protect-password');
+    if (protectPassword) protectPassword.addEventListener('input', () => { state.protectPassword = protectPassword.value; });
+    const protectConfirm = root.querySelector('#protect-confirm');
+    if (protectConfirm) protectConfirm.addEventListener('input', () => { state.protectConfirm = protectConfirm.value; });
     root.querySelectorAll('input[name="angle"]').forEach((el) => {
       el.addEventListener('change', () => { state.angle = Number(el.value); });
     });
@@ -924,6 +954,15 @@ export function createApp(root) {
         const file = state.files[0];
         if (!file) return fail('need-one'), draw();
         await runExport('pdf-images', [file], {}, `${stem(file.name)}-pages.zip`);
+      } else if (route === '/protect') {
+        const file = state.files[0];
+        if (!file) return fail('need-one'), draw();
+        const password = state.protectPassword || '';
+        if (password.length < 4 || password.length > 72) return fail('need-password'), draw();
+        if (password !== (state.protectConfirm || '')) return fail('mismatch'), draw();
+        await runExport('protect', [file], { password }, `${stem(file.name)}-protected.pdf`);
+        state.protectPassword = '';
+        state.protectConfirm = '';
       }
     });
   }
@@ -951,6 +990,7 @@ export function createApp(root) {
       '/watermark': watermarkView,
       '/pages': pagesView,
       '/pdf-images': pdfImagesView,
+      '/protect': protectView,
       '/login': loginView,
       '/register': registerView,
       '/verify': verifyView,

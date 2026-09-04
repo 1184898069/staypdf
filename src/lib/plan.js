@@ -11,6 +11,7 @@ export const LOCAL_TOOLS = [
   { id: 'watermark', requiresPro: true },
   { id: 'pages', requiresPro: true },
   { id: 'pdf-images', requiresPro: true },
+  { id: 'protect', requiresPro: true },
 ];
 
 export const LOCAL_PLANS = {

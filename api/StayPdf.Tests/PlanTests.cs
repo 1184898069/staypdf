@@ -30,6 +30,7 @@ public class PlanTests
         Assert.True(map["watermark"]);
         Assert.True(map["pages"]);
         Assert.True(map["pdf-images"]);
+        Assert.True(map["protect"]);
 
         var free = doc.RootElement.GetProperty("plans").GetProperty("free");
         Assert.Equal(3, free.GetProperty("dailyExports").GetInt32());
