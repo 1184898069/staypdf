@@ -179,6 +179,30 @@ public static class PdfProcessor
         return CopyAll(src);
     }
 
+
+    public static byte[] Grayscale(byte[] file)
+    {
+        using var src = Open(file, PdfDocumentOpenMode.Import);
+        if (src.PageCount < 1)
+        {
+            throw new PdfException("failed", "Could not process this file.");
+        }
+
+        var sizes = new List<(double W, double H)>(src.PageCount);
+        for (var i = 0; i < src.PageCount; i++)
+        {
+            sizes.Add((src.Pages[i].Width, src.Pages[i].Height));
+        }
+
+        // Medium quality raster rebuild; text becomes image (honest trade-off).
+        if (PdfRaster.TryRenderGrayscaleJpegs(file, dpi: 120, jpegQuality: 80, out var jpegs) && jpegs.Count > 0)
+        {
+            return PagesFromJpegs(jpegs, sizes);
+        }
+
+        throw new PdfException("failed", "Could not process this file.");
+    }
+
     public static int PageCount(byte[] file)
     {
         using var doc = Open(file, PdfDocumentOpenMode.Import);

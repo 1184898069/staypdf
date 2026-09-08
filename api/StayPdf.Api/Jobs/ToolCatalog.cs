@@ -30,7 +30,8 @@ public static class ToolCatalog
         new("pages", true),
         new("pdf-images", true),
         new("protect", true),
-        new("unlock", true)
+        new("unlock", true),
+        new("grayscale", true)
     ];
 
     public static ToolDef Get(string id)

@@ -4,7 +4,7 @@ import { downloadBytes, escapeHtml, isPdfFile, isImageFile, isDocxFile } from '.
 import { getApiUrl, getMe, getPlan, getTurnstileSiteKey, login, logout, postJob, register, resendVerification, verifyEmail } from './lib/api.js';
 import { LOCAL_TOOLS } from './lib/plan.js';
 
-const ROUTES = ['/', '/merge', '/split', '/rotate', '/delete', '/images', '/compress', '/ocr', '/word', '/watermark', '/pages', '/pdf-images', '/protect', '/unlock', '/login', '/register', '/verify'];
+const ROUTES = ['/', '/merge', '/split', '/rotate', '/delete', '/images', '/compress', '/ocr', '/word', '/watermark', '/pages', '/pdf-images', '/protect', '/unlock', '/grayscale', '/login', '/register', '/verify'];
 
 const TOOL_META = {
   merge: { href: '/merge', title: 'merge', desc: 'mergeDesc' },
@@ -20,6 +20,7 @@ const TOOL_META = {
   'pdf-images': { href: '/pdf-images', title: 'pdfImages', desc: 'pdfImagesDesc' },
   protect: { href: '/protect', title: 'protect', desc: 'protectDesc' },
   unlock: { href: '/unlock', title: 'unlock', desc: 'unlockDesc' },
+  grayscale: { href: '/grayscale', title: 'grayscale', desc: 'grayscaleDesc' },
 };
 
 function routeFromHash() {
@@ -622,6 +623,19 @@ export function createApp(root) {
     );
   }
 
+  function grayscaleView() {
+    return toolChrome(
+      'grayscale',
+      'grayscaleDesc',
+      `${dropzone(t('dropPdfOne'), false, 'application/pdf,.pdf')}
+       ${fileList()}
+       <p class="hint">${escapeHtml(t('grayscaleHint'))}</p>
+       <div class="row">
+         <button class="btn primary" id="run" type="button" ${state.busy ? 'disabled' : ''}>${escapeHtml(t('runGrayscale'))}</button>
+       </div>`,
+    );
+  }
+
   function loginView() {
     return `${header()}
       <a class="crumb" href="#/" data-nav="/">${escapeHtml(t('back'))}</a>
@@ -991,6 +1005,10 @@ export function createApp(root) {
         if (password.length < 1 || password.length > 72) return fail('need-password'), draw();
         await runExport('unlock', [file], { password }, `${stem(file.name)}-unlocked.pdf`);
         state.unlockPassword = '';
+      } else if (route === '/grayscale') {
+        const file = state.files[0];
+        if (!file) return fail('need-one'), draw();
+        await runExport('grayscale', [file], {}, `${stem(file.name)}-grayscale.pdf`);
       }
     });
   }
@@ -1020,6 +1038,7 @@ export function createApp(root) {
       '/pdf-images': pdfImagesView,
       '/protect': protectView,
       '/unlock': unlockView,
+      '/grayscale': grayscaleView,
       '/login': loginView,
       '/register': registerView,
       '/verify': verifyView,

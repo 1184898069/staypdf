@@ -65,6 +65,7 @@ public class JobTests
     [InlineData("pdf-images")]
     [InlineData("protect")]
     [InlineData("unlock")]
+    [InlineData("grayscale")]
     public async Task Anonymous_pro_tool_returns_402(string tool)
     {
         using var factory = new StayPdfFactory();
@@ -238,6 +239,17 @@ public class JobTests
             using var doc = PdfReader.Open(new MemoryStream(bytes), PdfDocumentOpenMode.Import);
             Assert.Equal(2, doc.PageCount);
         }
+        using (var form = new MultipartFormDataContent())
+        {
+            PdfBytes.AddPdf(form, PdfBytes.NoisyImagePdf(), "color.pdf");
+            var res = await client.PostAsync("/api/jobs/grayscale", form);
+            Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+            Assert.Equal("application/pdf", res.Content.Headers.ContentType?.MediaType);
+            var bytes = await res.Content.ReadAsByteArrayAsync();
+            using var doc = PdfReader.Open(new MemoryStream(bytes), PdfDocumentOpenMode.Import);
+            Assert.True(doc.PageCount >= 1);
+        }
+
     }
 
     [Fact]

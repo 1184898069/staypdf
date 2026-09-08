@@ -13,6 +13,7 @@ export const LOCAL_TOOLS = [
   { id: 'pdf-images', requiresPro: true },
   { id: 'protect', requiresPro: true },
   { id: 'unlock', requiresPro: true },
+  { id: 'grayscale', requiresPro: true },
 ];
 
 export const LOCAL_PLANS = {

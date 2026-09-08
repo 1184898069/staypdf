@@ -32,6 +32,7 @@ public class PlanTests
         Assert.True(map["pdf-images"]);
         Assert.True(map["protect"]);
         Assert.True(map["unlock"]);
+        Assert.True(map["grayscale"]);
 
         var free = doc.RootElement.GetProperty("plans").GetProperty("free");
         Assert.Equal(3, free.GetProperty("dailyExports").GetInt32());
