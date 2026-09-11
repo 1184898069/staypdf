@@ -33,6 +33,7 @@ public class PlanTests
         Assert.True(map["protect"]);
         Assert.True(map["unlock"]);
         Assert.True(map["grayscale"]);
+        Assert.True(map["nup"]);
 
         var free = doc.RootElement.GetProperty("plans").GetProperty("free");
         Assert.Equal(3, free.GetProperty("dailyExports").GetInt32());

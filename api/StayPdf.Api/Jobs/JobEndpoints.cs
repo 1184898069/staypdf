@@ -25,6 +25,7 @@ public static class JobEndpoints
         g.MapPost("/protect", Protect);
         g.MapPost("/unlock", Unlock);
         g.MapPost("/grayscale", Grayscale);
+        g.MapPost("/nup", Nup);
     }
 
     private static Task<IResult> Merge(HttpContext ctx, AppDbContext db, QuotaService quota, CancellationToken ct) =>
@@ -168,6 +169,18 @@ public static class JobEndpoints
             if (files.Count != 1) throw new PdfException("need-one", "Add a PDF first.");
             var bytes = PdfProcessor.Grayscale(files[0]);
             return new JobFile(bytes, "application/pdf", Stem(ctx, "document") + "-grayscale.pdf");
+        });
+
+
+    private static Task<IResult> Nup(HttpContext ctx, AppDbContext db, QuotaService quota, CancellationToken ct) =>
+        Run(ctx, db, quota, ct, "nup", files =>
+        {
+            if (files.Count != 1) throw new PdfException("need-one", "Add a PDF first.");
+            var layout = ctx.Request.Form["layout"].ToString();
+            var perSheet = 2;
+            if (int.TryParse(layout, out var parsed) && parsed is 2 or 4) perSheet = parsed;
+            var bytes = NupProcessor.Impose(files[0], perSheet);
+            return new JobFile(bytes, "application/pdf", Stem(ctx, "document") + "-nup.pdf");
         });
 
     private static Task<IResult> Protect(HttpContext ctx, AppDbContext db, QuotaService quota, CancellationToken ct) =>

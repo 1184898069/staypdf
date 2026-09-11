@@ -14,6 +14,7 @@ export const LOCAL_TOOLS = [
   { id: 'protect', requiresPro: true },
   { id: 'unlock', requiresPro: true },
   { id: 'grayscale', requiresPro: true },
+  { id: 'nup', requiresPro: true },
 ];
 
 export const LOCAL_PLANS = {

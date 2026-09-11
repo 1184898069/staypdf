@@ -4,7 +4,7 @@ import { downloadBytes, escapeHtml, isPdfFile, isImageFile, isDocxFile } from '.
 import { getApiUrl, getMe, getPlan, getTurnstileSiteKey, login, logout, postJob, register, resendVerification, verifyEmail } from './lib/api.js';
 import { LOCAL_TOOLS } from './lib/plan.js';
 
-const ROUTES = ['/', '/merge', '/split', '/rotate', '/delete', '/images', '/compress', '/ocr', '/word', '/watermark', '/pages', '/pdf-images', '/protect', '/unlock', '/grayscale', '/login', '/register', '/verify'];
+const ROUTES = ['/', '/merge', '/split', '/rotate', '/delete', '/images', '/compress', '/ocr', '/word', '/watermark', '/pages', '/pdf-images', '/protect', '/unlock', '/grayscale', '/nup', '/login', '/register', '/verify'];
 
 const TOOL_META = {
   merge: { href: '/merge', title: 'merge', desc: 'mergeDesc' },
@@ -21,6 +21,7 @@ const TOOL_META = {
   protect: { href: '/protect', title: 'protect', desc: 'protectDesc' },
   unlock: { href: '/unlock', title: 'unlock', desc: 'unlockDesc' },
   grayscale: { href: '/grayscale', title: 'grayscale', desc: 'grayscaleDesc' },
+  nup: { href: '/nup', title: 'nup', desc: 'nupDesc' },
 };
 
 function routeFromHash() {
@@ -103,6 +104,7 @@ export function createApp(root) {
     protectPassword: '',
     protectConfirm: '',
     unlockPassword: '',
+    nupLayout: '2',
     tools: LOCAL_TOOLS,
     email: '',
     password: '',
@@ -139,6 +141,7 @@ export function createApp(root) {
     state.protectPassword = '';
     state.protectConfirm = '';
     state.unlockPassword = '';
+    state.nupLayout = '2';
   }
 
   function addFiles(list, kind) {
@@ -636,6 +639,26 @@ export function createApp(root) {
     );
   }
 
+
+  function nupView() {
+    return toolChrome(
+      'nup',
+      'nupDesc',
+      `${dropzone(t('dropPdfOne'), false, 'application/pdf,.pdf')}
+       ${fileList()}
+       <label class="field">${escapeHtml(t('nupLayout'))}
+         <select id="nup-layout">
+           <option value="2" ${state.nupLayout === '2' ? 'selected' : ''}>${escapeHtml(t('nup2'))}</option>
+           <option value="4" ${state.nupLayout === '4' ? 'selected' : ''}>${escapeHtml(t('nup4'))}</option>
+         </select>
+       </label>
+       <p class="hint">${escapeHtml(t('nupHint'))}</p>
+       <div class="row">
+         <button class="btn primary" id="run" type="button" ${state.busy ? 'disabled' : ''}>${escapeHtml(t('runNup'))}</button>
+       </div>`,
+    );
+  }
+
   function loginView() {
     return `${header()}
       <a class="crumb" href="#/" data-nav="/">${escapeHtml(t('back'))}</a>
@@ -798,6 +821,8 @@ export function createApp(root) {
     if (protectConfirm) protectConfirm.addEventListener('input', () => { state.protectConfirm = protectConfirm.value; });
     const unlockPassword = root.querySelector('#unlock-password');
     if (unlockPassword) unlockPassword.addEventListener('input', () => { state.unlockPassword = unlockPassword.value; });
+    const nupLayout = root.querySelector('#nup-layout');
+    if (nupLayout) nupLayout.addEventListener('change', () => { state.nupLayout = nupLayout.value; });
     root.querySelectorAll('input[name="angle"]').forEach((el) => {
       el.addEventListener('change', () => { state.angle = Number(el.value); });
     });
@@ -1009,6 +1034,11 @@ export function createApp(root) {
         const file = state.files[0];
         if (!file) return fail('need-one'), draw();
         await runExport('grayscale', [file], {}, `${stem(file.name)}-grayscale.pdf`);
+      } else if (route === '/nup') {
+        const file = state.files[0];
+        if (!file) return fail('need-one'), draw();
+        const layout = state.nupLayout === '4' ? '4' : '2';
+        await runExport('nup', [file], { layout }, `${stem(file.name)}-nup.pdf`);
       }
     });
   }
@@ -1039,6 +1069,7 @@ export function createApp(root) {
       '/protect': protectView,
       '/unlock': unlockView,
       '/grayscale': grayscaleView,
+      '/nup': nupView,
       '/login': loginView,
       '/register': registerView,
       '/verify': verifyView,

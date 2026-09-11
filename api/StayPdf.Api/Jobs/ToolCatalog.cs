@@ -31,7 +31,8 @@ public static class ToolCatalog
         new("pdf-images", true),
         new("protect", true),
         new("unlock", true),
-        new("grayscale", true)
+        new("grayscale", true),
+        new("nup", true)
     ];
 
     public static ToolDef Get(string id)
