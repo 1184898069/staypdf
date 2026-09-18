@@ -32,7 +32,8 @@ public static class ToolCatalog
         new("protect", true),
         new("unlock", true),
         new("grayscale", true),
-        new("nup", true)
+        new("nup", true),
+        new("crop", true)
     ];
 
     public static ToolDef Get(string id)

@@ -26,6 +26,7 @@ public static class JobEndpoints
         g.MapPost("/unlock", Unlock);
         g.MapPost("/grayscale", Grayscale);
         g.MapPost("/nup", Nup);
+        g.MapPost("/crop", Crop);
     }
 
     private static Task<IResult> Merge(HttpContext ctx, AppDbContext db, QuotaService quota, CancellationToken ct) =>
@@ -182,6 +183,27 @@ public static class JobEndpoints
             var bytes = NupProcessor.Impose(files[0], perSheet);
             return new JobFile(bytes, "application/pdf", Stem(ctx, "document") + "-nup.pdf");
         });
+
+
+    private static Task<IResult> Crop(HttpContext ctx, AppDbContext db, QuotaService quota, CancellationToken ct) =>
+        Run(ctx, db, quota, ct, "crop", files =>
+        {
+            if (files.Count != 1) throw new PdfException("need-one", "Add a PDF first.");
+            var marginMm = 10;
+            var raw = ctx.Request.Form["marginMm"].ToString();
+            if (!string.IsNullOrWhiteSpace(raw))
+            {
+                if (!int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+                    || parsed is not (5 or 10 or 15 or 20))
+                {
+                    throw new PdfException("bad-margin", "Choose a margin of 5, 10, 15, or 20 mm.");
+                }
+                marginMm = parsed;
+            }
+            var bytes = CropProcessor.Crop(files[0], marginMm);
+            return new JobFile(bytes, "application/pdf", Stem(ctx, "document") + "-cropped.pdf");
+        });
+
 
     private static Task<IResult> Protect(HttpContext ctx, AppDbContext db, QuotaService quota, CancellationToken ct) =>
         Run(ctx, db, quota, ct, "protect", files =>

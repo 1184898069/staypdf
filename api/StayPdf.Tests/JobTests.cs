@@ -67,6 +67,7 @@ public class JobTests
     [InlineData("unlock")]
     [InlineData("grayscale")]
     [InlineData("nup")]
+    [InlineData("crop")]
     public async Task Anonymous_pro_tool_returns_402(string tool)
     {
         using var factory = new StayPdfFactory();
@@ -270,6 +271,20 @@ public class JobTests
             var bytes = await res.Content.ReadAsByteArrayAsync();
             using var doc = PdfReader.Open(new MemoryStream(bytes), PdfDocumentOpenMode.Import);
             Assert.Equal(1, doc.PageCount);
+        }
+
+        using (var form = new MultipartFormDataContent())
+        {
+            PdfBytes.AddPdf(form, PdfBytes.Pages(2), "doc.pdf");
+            form.Add(new StringContent("10"), "marginMm");
+            var res = await client.PostAsync("/api/jobs/crop", form);
+            Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+            Assert.Equal("application/pdf", res.Content.Headers.ContentType?.MediaType);
+            var bytes = await res.Content.ReadAsByteArrayAsync();
+            using var doc = PdfReader.Open(new MemoryStream(bytes), PdfDocumentOpenMode.Import);
+            Assert.Equal(2, doc.PageCount);
+            Assert.True(doc.Pages[0].Width < 595);
+            Assert.True(doc.Pages[0].Height < 841);
         }
 
     }

@@ -4,7 +4,7 @@ import { downloadBytes, escapeHtml, isPdfFile, isImageFile, isDocxFile } from '.
 import { getApiUrl, getMe, getPlan, getTurnstileSiteKey, login, logout, postJob, register, resendVerification, verifyEmail } from './lib/api.js';
 import { LOCAL_TOOLS } from './lib/plan.js';
 
-const ROUTES = ['/', '/merge', '/split', '/rotate', '/delete', '/images', '/compress', '/ocr', '/word', '/watermark', '/pages', '/pdf-images', '/protect', '/unlock', '/grayscale', '/nup', '/login', '/register', '/verify'];
+const ROUTES = ['/', '/merge', '/split', '/rotate', '/delete', '/images', '/compress', '/ocr', '/word', '/watermark', '/pages', '/pdf-images', '/protect', '/unlock', '/grayscale', '/nup', '/crop', '/login', '/register', '/verify'];
 
 const TOOL_META = {
   merge: { href: '/merge', title: 'merge', desc: 'mergeDesc' },
@@ -22,6 +22,7 @@ const TOOL_META = {
   unlock: { href: '/unlock', title: 'unlock', desc: 'unlockDesc' },
   grayscale: { href: '/grayscale', title: 'grayscale', desc: 'grayscaleDesc' },
   nup: { href: '/nup', title: 'nup', desc: 'nupDesc' },
+  crop: { href: '/crop', title: 'crop', desc: 'cropDesc' },
 };
 
 function routeFromHash() {
@@ -105,6 +106,7 @@ export function createApp(root) {
     protectConfirm: '',
     unlockPassword: '',
     nupLayout: '2',
+    cropMarginMm: '10',
     tools: LOCAL_TOOLS,
     email: '',
     password: '',
@@ -142,6 +144,7 @@ export function createApp(root) {
     state.protectConfirm = '';
     state.unlockPassword = '';
     state.nupLayout = '2';
+    state.cropMarginMm = '10';
   }
 
   function addFiles(list, kind) {
@@ -186,6 +189,7 @@ export function createApp(root) {
       'need-text': t('needText'),
       'need-password': t('needPassword'),
       'bad-password': t('badPassword'),
+      'bad-margin': t('badMargin'),
       mismatch: t('passwordMismatch'),
     };
     state.messageKind = 'err';
@@ -659,6 +663,27 @@ export function createApp(root) {
     );
   }
 
+  function cropView() {
+    return toolChrome(
+      'crop',
+      'cropDesc',
+      `${dropzone(t('dropPdfOne'), false, 'application/pdf,.pdf')}
+       ${fileList()}
+       <label class="field">${escapeHtml(t('cropMargin'))}
+         <select id="crop-margin">
+           <option value="5" ${state.cropMarginMm === '5' ? 'selected' : ''}>${escapeHtml(t('crop5'))}</option>
+           <option value="10" ${state.cropMarginMm === '10' ? 'selected' : ''}>${escapeHtml(t('crop10'))}</option>
+           <option value="15" ${state.cropMarginMm === '15' ? 'selected' : ''}>${escapeHtml(t('crop15'))}</option>
+           <option value="20" ${state.cropMarginMm === '20' ? 'selected' : ''}>${escapeHtml(t('crop20'))}</option>
+         </select>
+       </label>
+       <p class="hint">${escapeHtml(t('cropHint'))}</p>
+       <div class="row">
+         <button class="btn primary" id="run" type="button" ${state.busy ? 'disabled' : ''}>${escapeHtml(t('runCrop'))}</button>
+       </div>`,
+    );
+  }
+
   function loginView() {
     return `${header()}
       <a class="crumb" href="#/" data-nav="/">${escapeHtml(t('back'))}</a>
@@ -823,6 +848,8 @@ export function createApp(root) {
     if (unlockPassword) unlockPassword.addEventListener('input', () => { state.unlockPassword = unlockPassword.value; });
     const nupLayout = root.querySelector('#nup-layout');
     if (nupLayout) nupLayout.addEventListener('change', () => { state.nupLayout = nupLayout.value; });
+    const cropMargin = root.querySelector('#crop-margin');
+    if (cropMargin) cropMargin.addEventListener('change', () => { state.cropMarginMm = cropMargin.value; });
     root.querySelectorAll('input[name="angle"]').forEach((el) => {
       el.addEventListener('change', () => { state.angle = Number(el.value); });
     });
@@ -1039,6 +1066,12 @@ export function createApp(root) {
         if (!file) return fail('need-one'), draw();
         const layout = state.nupLayout === '4' ? '4' : '2';
         await runExport('nup', [file], { layout }, `${stem(file.name)}-nup.pdf`);
+      } else if (route === '/crop') {
+        const file = state.files[0];
+        if (!file) return fail('need-one'), draw();
+        const allowed = ['5', '10', '15', '20'];
+        const marginMm = allowed.includes(state.cropMarginMm) ? state.cropMarginMm : '10';
+        await runExport('crop', [file], { marginMm }, `${stem(file.name)}-cropped.pdf`);
       }
     });
   }
@@ -1070,6 +1103,7 @@ export function createApp(root) {
       '/unlock': unlockView,
       '/grayscale': grayscaleView,
       '/nup': nupView,
+      '/crop': cropView,
       '/login': loginView,
       '/register': registerView,
       '/verify': verifyView,

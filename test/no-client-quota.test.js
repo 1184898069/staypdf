@@ -28,6 +28,7 @@ describe('gated tools use the API', () => {
     assert.match(app, /['"]\/protect['"]/);
     assert.match(app, /['"]\/unlock['"]/);
     assert.match(app, /['"]\/grayscale['"]/);
+    assert.match(app, /['"]\/crop['"]/);
     assert.match(app, /LOCAL_TOOLS/);
     assert.doesNotMatch(app, /unlockDemoPro/);
     assert.doesNotMatch(api, /unlockDemoPro/);
@@ -42,7 +43,7 @@ describe('gated tools use the API', () => {
   it('local catalog matches ToolCatalog ids', () => {
     const catalog = readFileSync(join(root, 'api/StayPdf.Api/Jobs/ToolCatalog.cs'), 'utf8');
     const plan = readFileSync(join(root, 'src/lib/plan.js'), 'utf8');
-    for (const id of ['merge', 'split', 'rotate', 'delete', 'images', 'compress', 'ocr', 'word', 'watermark', 'pages', 'pdf-images', 'protect', 'unlock', 'grayscale']) {
+    for (const id of ['merge', 'split', 'rotate', 'delete', 'images', 'compress', 'ocr', 'word', 'watermark', 'pages', 'pdf-images', 'protect', 'unlock', 'grayscale', 'nup', 'crop']) {
       assert.match(catalog, new RegExp(`"${id}"`));
       assert.match(plan, new RegExp(`id: '${id}'`));
     }
