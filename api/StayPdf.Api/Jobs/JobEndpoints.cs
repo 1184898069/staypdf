@@ -27,6 +27,7 @@ public static class JobEndpoints
         g.MapPost("/grayscale", Grayscale);
         g.MapPost("/nup", Nup);
         g.MapPost("/crop", Crop);
+        g.MapPost("/resize", Resize);
     }
 
     private static Task<IResult> Merge(HttpContext ctx, AppDbContext db, QuotaService quota, CancellationToken ct) =>
@@ -202,6 +203,25 @@ public static class JobEndpoints
             }
             var bytes = CropProcessor.Crop(files[0], marginMm);
             return new JobFile(bytes, "application/pdf", Stem(ctx, "document") + "-cropped.pdf");
+        });
+
+
+    private static Task<IResult> Resize(HttpContext ctx, AppDbContext db, QuotaService quota, CancellationToken ct) =>
+        Run(ctx, db, quota, ct, "resize", files =>
+        {
+            if (files.Count != 1) throw new PdfException("need-one", "Add a PDF first.");
+            var paper = ctx.Request.Form["paper"].ToString();
+            if (string.IsNullOrWhiteSpace(paper)) paper = "a4";
+            else
+            {
+                paper = paper.Trim().ToLowerInvariant();
+                if (paper is not ("a4" or "letter"))
+                {
+                    throw new PdfException("bad-paper", "Choose a paper size of a4 or letter.");
+                }
+            }
+            var bytes = ResizeProcessor.Resize(files[0], paper);
+            return new JobFile(bytes, "application/pdf", Stem(ctx, "document") + "-resized.pdf");
         });
 
 

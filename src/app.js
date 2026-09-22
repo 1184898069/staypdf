@@ -4,7 +4,7 @@ import { downloadBytes, escapeHtml, isPdfFile, isImageFile, isDocxFile } from '.
 import { getApiUrl, getMe, getPlan, getTurnstileSiteKey, login, logout, postJob, register, resendVerification, verifyEmail } from './lib/api.js';
 import { LOCAL_TOOLS } from './lib/plan.js';
 
-const ROUTES = ['/', '/merge', '/split', '/rotate', '/delete', '/images', '/compress', '/ocr', '/word', '/watermark', '/pages', '/pdf-images', '/protect', '/unlock', '/grayscale', '/nup', '/crop', '/login', '/register', '/verify'];
+const ROUTES = ['/', '/merge', '/split', '/rotate', '/delete', '/images', '/compress', '/ocr', '/word', '/watermark', '/pages', '/pdf-images', '/protect', '/unlock', '/grayscale', '/nup', '/crop', '/resize', '/login', '/register', '/verify'];
 
 const TOOL_META = {
   merge: { href: '/merge', title: 'merge', desc: 'mergeDesc' },
@@ -23,6 +23,7 @@ const TOOL_META = {
   grayscale: { href: '/grayscale', title: 'grayscale', desc: 'grayscaleDesc' },
   nup: { href: '/nup', title: 'nup', desc: 'nupDesc' },
   crop: { href: '/crop', title: 'crop', desc: 'cropDesc' },
+  resize: { href: '/resize', title: 'resize', desc: 'resizeDesc' },
 };
 
 function routeFromHash() {
@@ -107,6 +108,7 @@ export function createApp(root) {
     unlockPassword: '',
     nupLayout: '2',
     cropMarginMm: '10',
+    resizePaper: 'a4',
     tools: LOCAL_TOOLS,
     email: '',
     password: '',
@@ -145,6 +147,7 @@ export function createApp(root) {
     state.unlockPassword = '';
     state.nupLayout = '2';
     state.cropMarginMm = '10';
+    state.resizePaper = 'a4';
   }
 
   function addFiles(list, kind) {
@@ -190,6 +193,7 @@ export function createApp(root) {
       'need-password': t('needPassword'),
       'bad-password': t('badPassword'),
       'bad-margin': t('badMargin'),
+      'bad-paper': t('badPaper'),
       mismatch: t('passwordMismatch'),
     };
     state.messageKind = 'err';
@@ -684,6 +688,25 @@ export function createApp(root) {
     );
   }
 
+  function resizeView() {
+    return toolChrome(
+      'resize',
+      'resizeDesc',
+      `${dropzone(t('dropPdfOne'), false, 'application/pdf,.pdf')}
+       ${fileList()}
+       <label class="field">${escapeHtml(t('resizePaper'))}
+         <select id="resize-paper">
+           <option value="a4" ${state.resizePaper === 'a4' ? 'selected' : ''}>${escapeHtml(t('resizeA4'))}</option>
+           <option value="letter" ${state.resizePaper === 'letter' ? 'selected' : ''}>${escapeHtml(t('resizeLetter'))}</option>
+         </select>
+       </label>
+       <p class="hint">${escapeHtml(t('resizeHint'))}</p>
+       <div class="row">
+         <button class="btn primary" id="run" type="button" ${state.busy ? 'disabled' : ''}>${escapeHtml(t('runResize'))}</button>
+       </div>`,
+    );
+  }
+
   function loginView() {
     return `${header()}
       <a class="crumb" href="#/" data-nav="/">${escapeHtml(t('back'))}</a>
@@ -850,6 +873,8 @@ export function createApp(root) {
     if (nupLayout) nupLayout.addEventListener('change', () => { state.nupLayout = nupLayout.value; });
     const cropMargin = root.querySelector('#crop-margin');
     if (cropMargin) cropMargin.addEventListener('change', () => { state.cropMarginMm = cropMargin.value; });
+    const resizePaper = root.querySelector('#resize-paper');
+    if (resizePaper) resizePaper.addEventListener('change', () => { state.resizePaper = resizePaper.value; });
     root.querySelectorAll('input[name="angle"]').forEach((el) => {
       el.addEventListener('change', () => { state.angle = Number(el.value); });
     });
@@ -1072,6 +1097,11 @@ export function createApp(root) {
         const allowed = ['5', '10', '15', '20'];
         const marginMm = allowed.includes(state.cropMarginMm) ? state.cropMarginMm : '10';
         await runExport('crop', [file], { marginMm }, `${stem(file.name)}-cropped.pdf`);
+      } else if (route === '/resize') {
+        const file = state.files[0];
+        if (!file) return fail('need-one'), draw();
+        const paper = state.resizePaper === 'letter' ? 'letter' : 'a4';
+        await runExport('resize', [file], { paper }, `${stem(file.name)}-resized.pdf`);
       }
     });
   }
@@ -1104,6 +1134,7 @@ export function createApp(root) {
       '/grayscale': grayscaleView,
       '/nup': nupView,
       '/crop': cropView,
+      '/resize': resizeView,
       '/login': loginView,
       '/register': registerView,
       '/verify': verifyView,

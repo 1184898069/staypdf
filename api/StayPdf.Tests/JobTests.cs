@@ -68,6 +68,7 @@ public class JobTests
     [InlineData("grayscale")]
     [InlineData("nup")]
     [InlineData("crop")]
+    [InlineData("resize")]
     public async Task Anonymous_pro_tool_returns_402(string tool)
     {
         using var factory = new StayPdfFactory();
@@ -285,6 +286,34 @@ public class JobTests
             Assert.Equal(2, doc.PageCount);
             Assert.True(doc.Pages[0].Width < 595);
             Assert.True(doc.Pages[0].Height < 841);
+        }
+
+        using (var form = new MultipartFormDataContent())
+        {
+            PdfBytes.AddPdf(form, PdfBytes.Pages(2), "doc.pdf");
+            form.Add(new StringContent("a4"), "paper");
+            var res = await client.PostAsync("/api/jobs/resize", form);
+            Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+            Assert.Equal("application/pdf", res.Content.Headers.ContentType?.MediaType);
+            var bytes = await res.Content.ReadAsByteArrayAsync();
+            using var doc = PdfReader.Open(new MemoryStream(bytes), PdfDocumentOpenMode.Import);
+            Assert.Equal(2, doc.PageCount);
+            Assert.InRange((double)doc.Pages[0].Width, 595.28 - 0.5, 595.28 + 0.5);
+            Assert.InRange((double)doc.Pages[0].Height, 841.89 - 0.5, 841.89 + 0.5);
+        }
+
+        using (var form = new MultipartFormDataContent())
+        {
+            PdfBytes.AddPdf(form, PdfBytes.Pages(2), "doc.pdf");
+            form.Add(new StringContent("letter"), "paper");
+            var res = await client.PostAsync("/api/jobs/resize", form);
+            Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+            Assert.Equal("application/pdf", res.Content.Headers.ContentType?.MediaType);
+            var bytes = await res.Content.ReadAsByteArrayAsync();
+            using var doc = PdfReader.Open(new MemoryStream(bytes), PdfDocumentOpenMode.Import);
+            Assert.Equal(2, doc.PageCount);
+            Assert.InRange((double)doc.Pages[0].Width, 612 - 0.5, 612 + 0.5);
+            Assert.InRange((double)doc.Pages[0].Height, 792 - 0.5, 792 + 0.5);
         }
 
     }

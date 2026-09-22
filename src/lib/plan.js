@@ -16,6 +16,7 @@ export const LOCAL_TOOLS = [
   { id: 'grayscale', requiresPro: true },
   { id: 'nup', requiresPro: true },
   { id: 'crop', requiresPro: true },
+  { id: 'resize', requiresPro: true },
 ];
 
 export const LOCAL_PLANS = {

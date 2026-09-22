@@ -35,6 +35,7 @@ public class PlanTests
         Assert.True(map["grayscale"]);
         Assert.True(map["nup"]);
         Assert.True(map["crop"]);
+        Assert.True(map["resize"]);
 
         var free = doc.RootElement.GetProperty("plans").GetProperty("free");
         Assert.Equal(3, free.GetProperty("dailyExports").GetInt32());
