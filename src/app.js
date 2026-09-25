@@ -194,6 +194,7 @@ export function createApp(root) {
       'bad-password': t('badPassword'),
       'bad-margin': t('badMargin'),
       'bad-paper': t('badPaper'),
+      'bad-layout': t('badLayout'),
       mismatch: t('passwordMismatch'),
     };
     state.messageKind = 'err';

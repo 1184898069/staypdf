@@ -28,6 +28,7 @@ describe('gated tools use the API', () => {
     assert.match(app, /['"]\/protect['"]/);
     assert.match(app, /['"]\/unlock['"]/);
     assert.match(app, /['"]\/grayscale['"]/);
+    assert.match(app, /['"]\/nup['"]/);
     assert.match(app, /['"]\/crop['"]/);
     assert.match(app, /['"]\/resize['"]/);
     assert.match(app, /LOCAL_TOOLS/);

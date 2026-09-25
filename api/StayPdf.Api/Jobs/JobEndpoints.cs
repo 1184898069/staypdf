@@ -178,9 +178,17 @@ public static class JobEndpoints
         Run(ctx, db, quota, ct, "nup", files =>
         {
             if (files.Count != 1) throw new PdfException("need-one", "Add a PDF first.");
-            var layout = ctx.Request.Form["layout"].ToString();
             var perSheet = 2;
-            if (int.TryParse(layout, out var parsed) && parsed is 2 or 4) perSheet = parsed;
+            var raw = ctx.Request.Form["layout"].ToString();
+            if (!string.IsNullOrWhiteSpace(raw))
+            {
+                if (!int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+                    || parsed is not (2 or 4))
+                {
+                    throw new PdfException("bad-layout", "Choose 2 or 4 pages per sheet.");
+                }
+                perSheet = parsed;
+            }
             var bytes = NupProcessor.Impose(files[0], perSheet);
             return new JobFile(bytes, "application/pdf", Stem(ctx, "document") + "-nup.pdf");
         });
