@@ -414,4 +414,21 @@ public class JobTests
         Assert.Contains("\"code\":\"bad-paper\"", body, StringComparison.Ordinal);
         Assert.DoesNotContain("%PDF", body, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task Pro_compress_bad_quality_returns_400()
+    {
+        using var factory = new StayPdfFactory();
+        using var client = factory.CreateClient();
+        await AuthHelpers.SignInProAsync(factory, client, "pro.compress.bad@example.com");
+
+        using var form = new MultipartFormDataContent();
+        PdfBytes.AddPdf(form, PdfBytes.Pages(1), "doc.pdf");
+        form.Add(new StringContent("ultra"), "quality");
+        var res = await client.PostAsync("/api/jobs/compress", form);
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+        var body = await res.Content.ReadAsStringAsync();
+        Assert.Contains("\"code\":\"bad-quality\"", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("%PDF", body, StringComparison.Ordinal);
+    }
 }

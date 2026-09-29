@@ -211,12 +211,14 @@ public static class PdfProcessor
 
     private static (int JpegQuality, int Dpi) ParseQuality(string? quality)
     {
-        var q = (quality ?? "medium").Trim().ToLowerInvariant();
+        var q = (quality ?? "").Trim().ToLowerInvariant();
+        if (q.Length == 0) q = "medium";
         return q switch
         {
             "low" => (40, 96),
+            "medium" => (58, 120),
             "high" => (75, 144),
-            _ => (58, 120)
+            _ => throw new PdfException("bad-quality", "Choose a quality of low, medium, or high.")
         };
     }
 

@@ -106,6 +106,15 @@ public static class JobEndpoints
         {
             if (files.Count != 1) throw new PdfException("need-one", "Add a PDF first.");
             var quality = ctx.Request.Form["quality"].ToString();
+            if (string.IsNullOrWhiteSpace(quality)) quality = "medium";
+            else
+            {
+                quality = quality.Trim().ToLowerInvariant();
+                if (quality is not ("low" or "medium" or "high"))
+                {
+                    throw new PdfException("bad-quality", "Choose a quality of low, medium, or high.");
+                }
+            }
             var bytes = PdfProcessor.Compress(files[0], quality);
             return new JobFile(bytes, "application/pdf", Stem(ctx, "document") + "-compressed.pdf");
         });
