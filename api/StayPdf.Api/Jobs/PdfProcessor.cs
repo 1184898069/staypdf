@@ -55,7 +55,7 @@ public static class PdfProcessor
         var turn = ((angle % 360) + 360) % 360;
         if (turn is not (0 or 90 or 180 or 270))
         {
-            throw new PdfException("failed", "Could not process this file.");
+            throw new PdfException("bad-angle", "Choose a rotation of 90, 180, or 270 degrees.");
         }
 
         using var doc = Open(file, PdfDocumentOpenMode.Modify);

@@ -56,7 +56,16 @@ public static class JobEndpoints
         {
             if (files.Count != 1) throw new PdfException("need-one", "Add a PDF first.");
             var angle = 90;
-            if (int.TryParse(ctx.Request.Form["angle"].ToString(), out var parsedAngle)) angle = parsedAngle;
+            var rawAngle = ctx.Request.Form["angle"].ToString();
+            if (!string.IsNullOrWhiteSpace(rawAngle))
+            {
+                if (!int.TryParse(rawAngle, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedAngle)
+                    || parsedAngle is not (90 or 180 or 270))
+                {
+                    throw new PdfException("bad-angle", "Choose a rotation of 90, 180, or 270 degrees.");
+                }
+                angle = parsedAngle;
+            }
             var count = PdfProcessor.PageCount(files[0]);
             var rangesRaw = ctx.Request.Form["ranges"].ToString();
             List<int> pages;
