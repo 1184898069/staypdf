@@ -107,6 +107,14 @@ public static class JobEndpoints
             if (files.Count == 0) throw new PdfException("need-image", "Add at least one image.");
             var fit = ctx.Request.Form["fit"].ToString();
             if (string.IsNullOrWhiteSpace(fit)) fit = "a4";
+            else
+            {
+                fit = fit.Trim().ToLowerInvariant();
+                if (fit is not ("a4" or "original"))
+                {
+                    throw new PdfException("bad-fit", "Choose a page fit of a4 or original.");
+                }
+            }
             return PdfProcessor.ImagesToPdf(files, fit);
         });
 
