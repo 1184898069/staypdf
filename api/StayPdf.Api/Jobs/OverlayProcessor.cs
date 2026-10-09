@@ -13,8 +13,9 @@ internal static class OverlayProcessor
         PdfFonts.Ensure();
         var safe = Sanitize(text);
         if (string.IsNullOrEmpty(safe)) throw new PdfException("need-text", "Add watermark text.");
-        var alpha = Math.Clamp(opacity, 0.1, 0.5);
-        return Overlay(file, (gfx, page, _, _) => DrawWatermark(gfx, page, safe, alpha));
+        if (!double.IsFinite(opacity) || opacity < 0.1 || opacity > 0.5)
+            throw new PdfException("bad-opacity", "Choose an opacity between 0.1 and 0.5.");
+        return Overlay(file, (gfx, page, _, _) => DrawWatermark(gfx, page, safe, opacity));
     }
 
     public static byte[] PageNumbers(byte[] file)

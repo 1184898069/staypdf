@@ -164,8 +164,16 @@ public static class JobEndpoints
             if (files.Count != 1) throw new PdfException("need-one", "Add a PDF first.");
             var text = ctx.Request.Form["text"].ToString();
             var opacity = 0.25;
-            if (double.TryParse(ctx.Request.Form["opacity"].ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+            var rawOpacity = ctx.Request.Form["opacity"].ToString();
+            if (!string.IsNullOrWhiteSpace(rawOpacity))
             {
+                if (!double.TryParse(rawOpacity, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+                    || !double.IsFinite(parsed)
+                    || parsed < 0.1
+                    || parsed > 0.5)
+                {
+                    throw new PdfException("bad-opacity", "Choose an opacity between 0.1 and 0.5.");
+                }
                 opacity = parsed;
             }
 
