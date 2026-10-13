@@ -58,6 +58,11 @@ public static class OcrProcessor
         var wanted = raw.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (wanted.Length == 0)
         {
+            if (raw.Length > 0)
+            {
+                throw new PdfException("bad-lang", "Choose a language of eng, chi_sim, or eng+chi_sim.");
+            }
+
             if (installed.Contains("eng") && installed.Contains("chi_sim")) return "eng+chi_sim";
             if (installed.Contains("eng")) return "eng";
             return installed.OrderBy(x => x, StringComparer.Ordinal).First();
@@ -67,11 +72,16 @@ public static class OcrProcessor
         foreach (var token in wanted)
         {
             var lang = token.Replace('-', '_').ToLowerInvariant();
-            if (lang is not ("eng" or "chi_sim" or "osd")) continue;
+            if (lang is not ("eng" or "chi_sim"))
+            {
+                throw new PdfException("bad-lang", "Choose a language of eng, chi_sim, or eng+chi_sim.");
+            }
+
             if (installed.Contains(lang) && !kept.Contains(lang)) kept.Add(lang);
         }
 
         if (kept.Count > 0) return string.Join('+', kept);
+        // Valid lang codes, but packs not installed — fall back so digital OCR path can still run.
         if (installed.Contains("eng")) return "eng";
         return installed.OrderBy(x => x, StringComparer.Ordinal).First();
     }

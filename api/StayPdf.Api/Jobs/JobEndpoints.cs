@@ -141,6 +141,29 @@ public static class JobEndpoints
         {
             if (files.Count != 1) throw new PdfException("need-one", "Add a PDF first.");
             var lang = ctx.Request.Form["lang"].ToString();
+            if (string.IsNullOrWhiteSpace(lang)) lang = "";
+            else
+            {
+                var wanted = lang.Trim().Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                if (wanted.Length == 0)
+                {
+                    throw new PdfException("bad-lang", "Choose a language of eng, chi_sim, or eng+chi_sim.");
+                }
+
+                var kept = new List<string>();
+                foreach (var token in wanted)
+                {
+                    var code = token.Replace('-', '_').ToLowerInvariant();
+                    if (code is not ("eng" or "chi_sim"))
+                    {
+                        throw new PdfException("bad-lang", "Choose a language of eng, chi_sim, or eng+chi_sim.");
+                    }
+
+                    if (!kept.Contains(code)) kept.Add(code);
+                }
+
+                lang = string.Join('+', kept);
+            }
             var bytes = OcrProcessor.ToText(files[0], lang);
             return new JobFile(bytes, "text/plain; charset=utf-8", Stem(ctx, "document") + "-ocr.txt");
         });

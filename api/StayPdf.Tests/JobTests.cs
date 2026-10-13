@@ -449,6 +449,23 @@ public class JobTests
     }
 
     [Fact]
+    public async Task Pro_ocr_bad_lang_returns_400()
+    {
+        using var factory = new StayPdfFactory();
+        using var client = factory.CreateClient();
+        await AuthHelpers.SignInProAsync(factory, client, "pro.ocr.badlang@example.com");
+
+        using var form = new MultipartFormDataContent();
+        PdfBytes.AddPdf(form, PdfBytes.Pages(1), "doc.pdf");
+        form.Add(new StringContent("fra"), "lang");
+        var res = await client.PostAsync("/api/jobs/ocr", form);
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+        var body = await res.Content.ReadAsStringAsync();
+        Assert.Contains("\"code\":\"bad-lang\"", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("%PDF", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Pro_watermark_bad_opacity_returns_400()
     {
         using var factory = new StayPdfFactory();
