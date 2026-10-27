@@ -13,7 +13,7 @@ internal static class UnlockProcessor
         var safe = Sanitize(password);
         if (safe is null)
         {
-            throw new PdfException("need-password", "Enter the PDF password (1–72 characters).");
+            throw new PdfException("need-unlock-password", "Enter the PDF password (1–72 characters).");
         }
 
         using var src = OpenWithPassword(file, safe);

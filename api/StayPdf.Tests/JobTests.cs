@@ -500,4 +500,30 @@ public class JobTests
         Assert.Contains("\"code\":\"bad-fit\"", body, StringComparison.Ordinal);
         Assert.DoesNotContain("%PDF", body, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task Pro_text_and_password_inputs_return_specific_400s()
+    {
+        using var factory = new StayPdfFactory();
+        using var client = factory.CreateClient();
+        await AuthHelpers.SignInProAsync(factory, client, "pro.inputs@example.com");
+
+        async Task AssertCode(string tool, string field, string value, string code)
+        {
+            using var form = new MultipartFormDataContent();
+            PdfBytes.AddPdf(form, PdfBytes.Pages(1), "doc.pdf");
+            form.Add(new StringContent(value), field);
+            var res = await client.PostAsync($"/api/jobs/{tool}", form);
+            Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+            var body = await res.Content.ReadAsStringAsync();
+            Assert.Contains($"\"code\":\"{code}\"", body, StringComparison.Ordinal);
+            Assert.DoesNotContain("%PDF", body, StringComparison.Ordinal);
+        }
+
+        await AssertCode("watermark", "text", "   ", "need-text");
+        await AssertCode("protect", "password", "abc", "need-password");
+        await AssertCode("protect", "password", new string('x', 73), "need-password");
+        await AssertCode("unlock", "password", "", "need-unlock-password");
+        await AssertCode("unlock", "password", new string('x', 73), "need-unlock-password");
+    }
 }

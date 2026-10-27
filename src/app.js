@@ -191,6 +191,7 @@ export function createApp(root) {
       'need-doc': t('needDoc'),
       'need-text': t('needText'),
       'need-password': t('needPassword'),
+      'need-unlock-password': t('needUnlockPassword'),
       'bad-password': t('badPassword'),
       'bad-margin': t('badMargin'),
       'bad-paper': t('badPaper'),
@@ -1085,7 +1086,7 @@ export function createApp(root) {
         const file = state.files[0];
         if (!file) return fail('need-one'), draw();
         const password = state.unlockPassword || '';
-        if (password.length < 1 || password.length > 72) return fail('need-password'), draw();
+        if (password.length < 1 || password.length > 72) return fail('need-unlock-password'), draw();
         await runExport('unlock', [file], { password }, `${stem(file.name)}-unlocked.pdf`);
         state.unlockPassword = '';
       } else if (route === '/grayscale') {
