@@ -432,6 +432,28 @@ public class JobTests
         Assert.DoesNotContain("%PDF", body, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("split", "foo", "bad-range")]
+    [InlineData("split", "1,a", "bad-range")]
+    [InlineData("rotate", "1-2-3", "bad-range")]
+    [InlineData("delete", "x", "bad-range")]
+    [InlineData("split", "9", "out-of-range")]
+    public async Task Invalid_page_list_returns_known_code(string tool, string ranges, string code)
+    {
+        using var factory = new StayPdfFactory();
+        using var client = factory.CreateClient();
+
+        using var form = new MultipartFormDataContent();
+        PdfBytes.AddPdf(form, PdfBytes.Pages(3), "doc.pdf");
+        form.Add(new StringContent(ranges), "ranges");
+        var res = await client.PostAsync($"/api/jobs/{tool}", form);
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+        var body = await res.Content.ReadAsStringAsync();
+        Assert.Contains($"\"code\":\"{code}\"", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"code\":\"invalid\"", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("%PDF", body, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Rotate_bad_angle_returns_400()
     {

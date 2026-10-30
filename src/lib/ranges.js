@@ -76,3 +76,8 @@ export function invertPages(pageCount, remove) {
   }
   return keep;
 }
+
+/** Map a parsePageRanges error to a fail-map code: out-of-range stays, everything else is bad-range. */
+export function rangeFailCode(error) {
+  return error === 'out-of-range' ? 'out-of-range' : 'bad-range';
+}

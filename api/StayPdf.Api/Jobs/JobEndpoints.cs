@@ -37,6 +37,12 @@ public static class JobEndpoints
             return PdfProcessor.Merge(files);
         });
 
+    // Only two range codes leave the API: out-of-range (page past the end) and bad-range (anything else).
+    private static PdfException RangeFailure(string? error) =>
+        error == "out-of-range"
+            ? new PdfException("out-of-range", "A page number is outside this file.")
+            : new PdfException("bad-range", "Check the page list.");
+
     private static Task<IResult> Split(HttpContext ctx, AppDbContext db, QuotaService quota, CancellationToken ct) =>
         Run(ctx, db, quota, ct, "split", "extract.pdf", files =>
         {
@@ -45,7 +51,7 @@ public static class JobEndpoints
             var parsed = PageRanges.Parse(ctx.Request.Form["ranges"].ToString(), count);
             if (!parsed.Success)
             {
-                throw new PdfException(parsed.Error == "empty" ? "bad-range" : parsed.Error ?? "bad-range", "Check the page list.");
+                throw RangeFailure(parsed.Error);
             }
 
             return PdfProcessor.Split(files[0], parsed.Pages);
@@ -78,7 +84,7 @@ public static class JobEndpoints
                 var parsed = PageRanges.Parse(rangesRaw, count);
                 if (!parsed.Success)
                 {
-                    throw new PdfException(parsed.Error == "empty" ? "bad-range" : parsed.Error ?? "bad-range", "Check the page list.");
+                    throw RangeFailure(parsed.Error);
                 }
 
                 pages = parsed.Pages;
@@ -95,7 +101,7 @@ public static class JobEndpoints
             var parsed = PageRanges.Parse(ctx.Request.Form["ranges"].ToString(), count);
             if (!parsed.Success)
             {
-                throw new PdfException(parsed.Error == "empty" ? "bad-range" : parsed.Error ?? "bad-range", "Check the page list.");
+                throw RangeFailure(parsed.Error);
             }
 
             return PdfProcessor.Delete(files[0], parsed.Pages);

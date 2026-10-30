@@ -1,5 +1,5 @@
 import { t, getLang, setLang } from './i18n.js';
-import { parsePageRanges } from './lib/ranges.js';
+import { parsePageRanges, rangeFailCode } from './lib/ranges.js';
 import { downloadBytes, escapeHtml, isPdfFile, isImageFile, isDocxFile } from './lib/download.js';
 import { getApiUrl, getMe, getPlan, getTurnstileSiteKey, login, logout, postJob, register, resendVerification, verifyEmail } from './lib/api.js';
 import { LOCAL_TOOLS } from './lib/plan.js';
@@ -1025,21 +1025,21 @@ export function createApp(root) {
         const file = state.files[0];
         if (!file) return fail('need-one'), draw();
         const parsed = parsePageRanges(state.ranges, 9999);
-        if (!parsed.ok) return fail(parsed.error === 'empty' ? 'bad-range' : parsed.error), draw();
+        if (!parsed.ok) return fail(rangeFailCode(parsed.error)), draw();
         await runExport('split', [file], { ranges: state.ranges }, `${stem(file.name)}-extract.pdf`);
       } else if (route === '/rotate') {
         const file = state.files[0];
         if (!file) return fail('need-one'), draw();
         if (state.ranges.trim()) {
           const parsed = parsePageRanges(state.ranges, 9999);
-          if (!parsed.ok) return fail(parsed.error === 'empty' ? 'bad-range' : parsed.error), draw();
+          if (!parsed.ok) return fail(rangeFailCode(parsed.error)), draw();
         }
         await runExport('rotate', [file], { ranges: state.ranges, angle: state.angle }, `${stem(file.name)}-rotated.pdf`);
       } else if (route === '/delete') {
         const file = state.files[0];
         if (!file) return fail('need-one'), draw();
         const parsed = parsePageRanges(state.ranges, 9999);
-        if (!parsed.ok) return fail(parsed.error === 'empty' ? 'bad-range' : parsed.error), draw();
+        if (!parsed.ok) return fail(rangeFailCode(parsed.error)), draw();
         await runExport('delete', [file], { ranges: state.ranges }, `${stem(file.name)}-deleted.pdf`);
       } else if (route === '/images') {
         if (state.files.length === 0) return fail('need-image'), draw();

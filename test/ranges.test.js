@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parsePageRanges, allPageNumbers, invertPages } from '../src/lib/ranges.js';
+import { parsePageRanges, allPageNumbers, invertPages, rangeFailCode } from '../src/lib/ranges.js';
 
 describe('parsePageRanges', () => {
   it('parses a simple range', () => {
@@ -78,5 +78,17 @@ describe('allPageNumbers / invertPages', () => {
   it('inverts a deletion set', () => {
     assert.deepEqual(invertPages(5, [2, 4]), [1, 3, 5]);
     assert.deepEqual(invertPages(3, [1, 2, 3]), []);
+  });
+});
+
+describe('rangeFailCode', () => {
+  it('shows the page-list hint for invalid or empty input', () => {
+    assert.equal(rangeFailCode(parsePageRanges('foo', 10).error), 'bad-range');
+    assert.equal(rangeFailCode(parsePageRanges('1,a,3', 10).error), 'bad-range');
+    assert.equal(rangeFailCode(parsePageRanges('', 10).error), 'bad-range');
+  });
+
+  it('keeps out-of-range distinct', () => {
+    assert.equal(rangeFailCode(parsePageRanges('11', 10).error), 'out-of-range');
   });
 });
